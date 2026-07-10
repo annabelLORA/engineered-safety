@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engineered Safety · Idea Workflow</title>
+<style>
+  :root{
+    --bg:#f2f5f8;
+    --surface:#ffffff;
+    --surface-2:#f8fafc;
+    --ink:#16222e;
+    --muted:#5c6b7a;
+    --line:#dde5ec;
+    --primary:#0d5c63;
+    --primary-ink:#ffffff;
+    --primary-soft:#e0f0f1;
+    --amber:#b45309;
+    --amber-soft:#fef3e2;
+    --green:#15803d;
+    --green-soft:#e7f5ec;
+    --red:#b91c1c;
+    --red-soft:#fdecec;
+    --purple:#6d28d9;
+    --purple-soft:#f1ebfd;
+    --blue:#1d4ed8;
+    --blue-soft:#e8eefc;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(22,34,46,.06),0 4px 16px rgba(22,34,46,.06);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:16px}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;min-height:100vh}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:.95rem;color:var(--ink)}
+
+  /* ---------- Header ---------- */
+  .topbar{background:var(--primary);color:var(--primary-ink);position:sticky;top:0;z-index:40;box-shadow:var(--shadow)}
+  .topbar-inner{max-width:1100px;margin:0 auto;padding:.7rem 1.25rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:1.05rem;letter-spacing:.01em}
+  .brand svg{flex:none}
+  .brand small{display:block;font-weight:400;font-size:.72rem;opacity:.75;letter-spacing:.04em;text-transform:uppercase}
+  .topbar .spacer{flex:1}
+  .role-switch{display:flex;background:rgba(255,255,255,.14);border-radius:999px;padding:3px;gap:2px}
+  .role-switch button{border:none;background:transparent;color:rgba(255,255,255,.85);padding:.35rem .85rem;border-radius:999px;font-size:.82rem;font-weight:600;transition:background .15s,color .15s}
+  .role-switch button.active{background:#fff;color:var(--primary)}
+  .role-hint{font-size:.72rem;opacity:.7;width:100%;text-align:right;margin-top:-.25rem;padding-bottom:.2rem}
+
+  /* ---------- Layout ---------- */
+  .wrap{max-width:1100px;margin:0 auto;padding:1.5rem 1.25rem 4rem}
+  .view-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap}
+  .view-head h1{font-size:1.45rem;letter-spacing:-.01em}
+  .view-head p{color:var(--muted);font-size:.92rem;max-width:52ch}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card-pad{padding:1.25rem 1.4rem}
+  .card + .card{margin-top:1rem}
+  .card h2{font-size:1.02rem;margin-bottom:.25rem}
+  .card .sub{color:var(--muted);font-size:.85rem;margin-bottom:1rem}
+
+  /* ---------- Buttons ---------- */
+  .btn{display:inline-flex;align-items:center;gap:.45rem;border-radius:9px;border:1px solid transparent;font-weight:600;font-size:.9rem;padding:.55rem 1.05rem;transition:filter .15s,background .15s}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-red{background:var(--red);color:#fff}
+  .btn-purple{background:var(--purple);color:#fff}
+  .btn-ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
+  .btn-ghost:hover{background:var(--surface-2);filter:none}
+  .btn-link{background:none;border:none;color:var(--primary);font-weight:600;font-size:.88rem;padding:0;text-decoration:underline;text-underline-offset:3px}
+  .btn-sm{padding:.35rem .7rem;font-size:.8rem;border-radius:7px}
+
+  /* ---------- Badges ---------- */
+  .badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.02em;padding:.2rem .65rem;white-space:nowrap}
+  .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .b-amber{background:var(--amber-soft);color:var(--amber)}
+  .b-purple{background:var(--purple-soft);color:var(--purple)}
+  .b-blue{background:var(--blue-soft);color:var(--blue)}
+  .b-teal{background:var(--primary-soft);color:var(--primary)}
+  .b-green{background:var(--green-soft);color:var(--green)}
+  .b-red{background:var(--red-soft);color:var(--red)}
+  .b-gray{background:#eceff3;color:var(--muted)}
+
+  /* ---------- Stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;margin-bottom:1.25rem}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:.85rem 1rem}
+  .stat .n{font-size:1.55rem;font-weight:700;line-height:1.2}
+  .stat .l{font-size:.76rem;color:var(--muted);font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+
+  /* ---------- Initiative list ---------- */
+  .ilist{display:flex;flex-direction:column;gap:.75rem}
+  .irow{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1rem 1.25rem;display:flex;gap:1rem;align-items:center;cursor:pointer;transition:border-color .15s,box-shadow .15s;box-shadow:var(--shadow)}
+  .irow:hover{border-color:var(--primary)}
+  .irow .main{flex:1;min-width:0}
+  .irow .id{font-size:.75rem;font-weight:700;color:var(--primary);letter-spacing:.03em}
+  .irow .title{font-weight:650;margin:.1rem 0 .15rem}
+  .irow .meta{font-size:.8rem;color:var(--muted);display:flex;gap:.9rem;flex-wrap:wrap}
+  .irow .side{display:flex;flex-direction:column;align-items:flex-end;gap:.4rem;flex:none}
+  .action-chip{font-size:.72rem;font-weight:700;color:var(--amber);background:var(--amber-soft);border-radius:6px;padding:.15rem .5rem}
+  .empty{padding:2.5rem 1rem;text-align:center;color:var(--muted);font-size:.92rem;background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius)}
+
+  /* ---------- Stage tracker ---------- */
+  .stages{display:flex;gap:.5rem;margin:0 0 1.25rem}
+  .stage{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.6rem .9rem;display:flex;align-items:center;gap:.6rem;font-size:.82rem;font-weight:600;color:var(--muted)}
+  .stage .dot{width:24px;height:24px;border-radius:50%;background:#eceff3;color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex:none}
+  .stage.done{color:var(--green)}
+  .stage.done .dot{background:var(--green);color:#fff}
+  .stage.now{border-color:var(--primary);color:var(--primary)}
+  .stage.now .dot{background:var(--primary);color:#fff}
+  .stage.dead{color:var(--red)}
+  .stage.dead .dot{background:var(--red);color:#fff}
+
+  /* ---------- Forms ---------- */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem}
+  .form-grid .full{grid-column:1/-1}
+  .field label{display:block;font-size:.8rem;font-weight:700;margin-bottom:.3rem;letter-spacing:.01em}
+  .field label .req{color:var(--red)}
+  .field label .opt{color:var(--muted);font-weight:500}
+  .field .help{font-size:.75rem;color:var(--muted);margin-top:.3rem}
+  .field input[type=text],.field input[type=url],.field input[type=date],.field select,.field textarea{
+    width:100%;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;background:var(--surface);transition:border-color .15s,box-shadow .15s}
+  .field textarea{min-height:96px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .field input[readonly]{background:var(--surface-2);color:var(--muted)}
+  .field.invalid input,.field.invalid select,.field.invalid textarea{border-color:var(--red)}
+  .field .err{display:none;font-size:.75rem;color:var(--red);margin-top:.3rem;font-weight:600}
+  .field.invalid .err{display:block}
+  .checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.4rem .8rem;border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;background:var(--surface)}
+  .checks label{display:flex;align-items:center;gap:.5rem;font-size:.86rem;font-weight:500;margin:0;cursor:pointer}
+  .checks input{accent-color:var(--primary);width:15px;height:15px}
+  .form-actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.4rem;padding-top:1.1rem;border-top:1px solid var(--line)}
+
+  /* ---------- Detail ---------- */
+  .detail-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:1rem;align-items:start}
+  @media(max-width:820px){.detail-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.stages{flex-direction:column}}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1.25rem;font-size:.88rem}
+  .kv dt{color:var(--muted);font-weight:600;white-space:nowrap}
+  .kv dd{min-width:0;overflow-wrap:anywhere}
+  .tags{display:flex;flex-wrap:wrap;gap:.35rem}
+  .tag{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;font-size:.75rem;font-weight:600;padding:.12rem .5rem;color:var(--muted)}
+  .summary-block{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;font-size:.9rem;margin-top:.75rem;white-space:pre-wrap}
+  .callout{border-radius:10px;padding:.85rem 1rem;font-size:.88rem;display:flex;gap:.6rem;align-items:flex-start}
+  .callout.red{background:var(--red-soft);color:var(--red)}
+  .callout.green{background:var(--green-soft);color:var(--green)}
+  .callout.amber{background:var(--amber-soft);color:var(--amber)}
+  .callout.teal{background:var(--primary-soft);color:var(--primary)}
+  .callout strong{font-weight:700}
+
+  /* ---------- Comments / activity ---------- */
+  .clog{list-style:none;display:flex;flex-direction:column;gap:.7rem;max-height:340px;overflow-y:auto}
+  .clog li{border-left:3px solid var(--line);padding:.1rem 0 .1rem .8rem}
+  .clog li.sys{border-left-color:var(--primary)}
+  .clog .who{font-size:.78rem;font-weight:700}
+  .clog .who .r{color:var(--muted);font-weight:500}
+  .clog .when{font-size:.72rem;color:var(--muted)}
+  .clog .txt{font-size:.86rem;margin-top:.1rem;white-space:pre-wrap}
+  .comment-box{display:flex;gap:.5rem;margin-top:.9rem}
+  .comment-box textarea{flex:1;min-height:44px;border:1px solid var(--line);border-radius:8px;padding:.5rem .65rem}
+
+  /* ---------- Decision panel ---------- */
+  .decisions{display:flex;flex-direction:column;gap:.6rem}
+  .decisions .btn{justify-content:center;width:100%}
+  .decision-note{font-size:.78rem;color:var(--muted)}
+  .reveal{border:1px solid var(--line);border-radius:10px;padding:.9rem;background:var(--surface-2);margin-top:.4rem}
+  .reveal h3{font-size:.88rem;margin-bottom:.5rem}
+
+  /* ---------- Confirmation ---------- */
+  .confirm-hero{text-align:center;padding:2.5rem 1.5rem 1.5rem}
+  .confirm-hero .tick{width:64px;height:64px;border-radius:50%;background:var(--green-soft);color:var(--green);display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem}
+  .confirm-hero h1{font-size:1.4rem;margin-bottom:.35rem}
+  .confirm-hero .iid{font-size:1.05rem;font-weight:700;color:var(--primary);letter-spacing:.04em}
+  .confirm-hero p{color:var(--muted);max-width:56ch;margin:.6rem auto 0;font-size:.92rem}
+  .next-steps{max-width:560px;margin:1.5rem auto 0;text-align:left}
+  .next-steps h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.7rem;text-align:center}
+  .flow{list-style:none;display:flex;flex-direction:column;gap:0}
+  .flow li{display:flex;gap:.85rem;position:relative;padding-bottom:1.1rem}
+  .flow li:last-child{padding-bottom:0}
+  .flow li::before{content:"";position:absolute;left:13px;top:28px;bottom:2px;width:2px;background:var(--line)}
+  .flow li:last-child::before{display:none}
+  .flow .n{width:28px;height:28px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex:none;position:relative;z-index:1}
+  .flow .t{font-size:.9rem}
+  .flow .t b{display:block}
+  .flow .t span{color:var(--muted);font-size:.82rem}
+
+  /* ---------- Toast ---------- */
+  #toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:.65rem 1.2rem;border-radius:10px;font-size:.88rem;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .back{display:inline-flex;align-items:center;gap:.35rem;color:var(--muted);background:none;border:none;font-size:.85rem;font-weight:600;margin-bottom:1rem}
+  .back:hover{color:var(--primary)}
+  .footer-note{margin-top:2.5rem;text-align:center;font-size:.75rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 2L4 5.5V11c0 5 3.4 9.4 8 10.8 4.6-1.4 8-5.8 8-10.8V5.5L12 2z" fill="rgba(255,255,255,.18)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 12l2.4 2.4L15.5 9.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>Engineered Safety<small>Idea Workflow</small></div>
+    </div>
+    <div class="spacer"></div>
+    <nav class="role-switch" id="roleSwitch" aria-label="Acting role"></nav>
+  </div>
+</header>
+
+<main class="wrap" id="app"></main>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+
+/* =============================================================
+   Constants & reference data
+============================================================= */
+const ROLES = {
+  delivery: "Delivery Team",
+  esl:      "ESL Lead",
+  pl:       "Project Leader",
+};
+
+const CURRENT_PROJECT = "Horizon North Infrastructure Programme"; // auto-fills Project Name
+
+const BENEFIT_CATEGORIES = [
+  "Fatality & Serious Injury Prevention",
+  "Occupational Health & Wellbeing",
+  "Environmental Protection",
+  "Process Safety",
+  "Quality & Assurance",
+  "Efficiency & Cost Reduction",
+];
+
+const FSR_CATEGORIES = [
+  "Working at Height",
+  "Lifting Operations",
+  "Mobile Plant & Driving",
+  "Energy Isolation",
+  "Confined Spaces",
+  "Excavations & Ground Works",
+  "Line of Fire",
+  "Dropped Objects",
+  "Temporary Works",
+];
+
+const PC1_INCIDENTS = [
+  { id: "EVT-2026-0041", label: "EVT-2026-0041 · Dropped scaffold tube, Zone 3" },
+  { id: "EVT-2026-0087", label: "EVT-2026-0087 · Excavator near-miss with live cable" },
+  { id: "EVT-2026-0102", label: "EVT-2026-0102 · Uncontrolled load swing during lift" },
+  { id: "EVT-2026-0139", label: "EVT-2026-0139 · Stored energy release, hydraulic line" },
+  { id: "EVT-2026-0155", label: "EVT-2026-0155 · Worker in exclusion zone during reversing" },
+];
+
+/* Statuses */
+const ST = {
+  PENDING_ESL: "pending-esl",   // Stage 2 — awaiting ESL Lead
+  PENDING_PL:  "pending-pl",    // Stage 2 — escalated, awaiting Project Leader
+  APPROVED:    "approved",      // Stage 3 — awaiting Action Plan
+  EXECUTION:   "execution",     // Stage 3 — Action Plan in progress
+  POST_IMPL:   "post-impl",     // Stage 3 — awaiting Post-Implementation Form
+  COMPLETE:    "complete",
+  NON_VIABLE:  "non-viable",    // feedback available for Delivery Team
+  CLOSED_NV:   "closed-nv",     // feedback received / closed
+};
+
+const STATUS_META = {
+  [ST.PENDING_ESL]: { label: "Awaiting ESL Review",            cls: "b-amber"  },
+  [ST.PENDING_PL]:  { label: "Escalated · Awaiting Project Leader", cls: "b-purple" },
+  [ST.APPROVED]:    { label: "Approved · Action Plan Required", cls: "b-blue"   },
+  [ST.EXECUTION]:   { label: "In Execution",                    cls: "b-teal"   },
+  [ST.POST_IMPL]:   { label: "Awaiting Post-Implementation",    cls: "b-blue"   },
+  [ST.COMPLETE]:    { label: "Complete",                        cls: "b-green"  },
+  [ST.NON_VIABLE]:  { label: "Non-Viable · Feedback Available", cls: "b-red"    },
+  [ST.CLOSED_NV]:   { label: "Closed · Non-Viable",             cls: "b-gray"   },
+};
+
+/* Which role owns the next action for each status */
+const NEXT_ACTOR = {
+  [ST.PENDING_ESL]: "esl",
+  [ST.PENDING_PL]:  "pl",
+  [ST.APPROVED]:    "delivery",
+  [ST.EXECUTION]:   "delivery",
+  [ST.POST_IMPL]:   "delivery",
+  [ST.NON_VIABLE]:  "delivery",
+};
+
+/* =============================================================
+   State & persistence
+============================================================= */
+const STORE_KEY = "es-idea-workflow-v1";
+
+let state = {
+  role: "delivery",
+  view: { name: "dashboard" },
+  ideas: [],
+  seq: 1,
+};
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ideas: state.ideas, seq: state.seq })); } catch (e) {}
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.ideas)) { state.ideas = d.ideas; state.seq = d.seq || d.ideas.length + 1; return true; }
+    }
+  } catch (e) {}
+  return false;
+}
+
+function nowISO() { return new Date().toISOString(); }
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + ", " +
+         d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+function nextId() {
+  const id = "ESI-2026-" + String(state.seq).padStart(3, "0");
+  state.seq += 1;
+  return id;
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* =============================================================
+   Seed data (first run only)
+============================================================= */
+function seed() {
+  const daysAgo = n => new Date(Date.now() - n * 864e5).toISOString();
+  const mk = (over) => Object.assign({
+    project: CURRENT_PROJECT,
+    linkedIncident: "",
+    log: [],
+    actionPlan: null,
+    postImpl: null,
+    feedback: "",
+  }, over);
+
+  state.ideas = [
+    mk({
+      id: "ESI-2026-001",
+      title: "QR-coded pre-use checks for MEWPs",
+      summary: "Replace paper pre-use inspection sheets on mobile elevating work platforms with QR-code checklists. Operators scan the plant ID to open the correct checklist; failed checks automatically quarantine the unit and notify the plant coordinator.",
+      benefitCategory: "Fatality & Serious Injury Prevention",
+      fsrCategories: ["Working at Height", "Mobile Plant & Driving"],
+      linkedIncident: "EVT-2026-0041",
+      submittedBy: "M. Okafor (Delivery Team)",
+      submittedAt: daysAgo(2),
+      status: ST.PENDING_ESL,
+      log: [
+        { at: daysAgo(2), who: "M. Okafor", role: "Delivery Team", type: "sys", text: "Idea submitted." },
+      ],
+    }),
+    mk({
+      id: "ESI-2026-002",
+      title: "Proximity-warning vests in reversing zones",
+      summary: "Trial wearable proximity tags that trigger an in-cab alarm and vest vibration when a pedestrian enters a reversing vehicle's exclusion zone. Escalated for programme-level funding as it affects all sites.",
+      benefitCategory: "Fatality & Serious Injury Prevention",
+      fsrCategories: ["Mobile Plant & Driving", "Line of Fire"],
+      linkedIncident: "EVT-2026-0155",
+      submittedBy: "J. Rivera (Delivery Team)",
+      submittedAt: daysAgo(6),
+      status: ST.PENDING_PL,
+      log: [
+        { at: daysAgo(6), who: "J. Rivera", role: "Delivery Team", type: "sys", text: "Idea submitted." },
+        { at: daysAgo(4), who: "P. Anand", role: "ESL Lead", type: "comment", text: "Strong proposal but cost sits above delivery-level authority. Escalating for programme decision." },
+        { at: daysAgo(4), who: "P. Anand", role: "ESL Lead", type: "sys", text: "Escalated to Project Leader." },
+      ],
+    }),
+    mk({
+      id: "ESI-2026-003",
+      title: "Standardised lift-plan visual boards",
+      summary: "Introduce A1 visual lift-plan boards at every crane position showing the current lift plan, exclusion zones and appointed person. Boards updated at each shift briefing.",
+      benefitCategory: "Process Safety",
+      fsrCategories: ["Lifting Operations", "Dropped Objects"],
+      linkedIncident: "EVT-2026-0102",
+      submittedBy: "S. Whitmore (Delivery Team)",
+      submittedAt: daysAgo(12),
+      status: ST.APPROVED,
+      log: [
+        { at: daysAgo(12), who: "S. Whitmore", role: "Delivery Team", type: "sys", text: "Idea submitted." },
+        { at: daysAgo(10), who: "P. Anand", role: "ESL Lead", type: "comment", text: "Low cost, high visibility. Please align board layout with the existing permit boards." },
+        { at: daysAgo(10), who: "P. Anand", role: "ESL Lead", type: "sys", text: "Approved. Delivery Team to create Action Plan." },
+      ],
+    }),
+    mk({
+      id: "ESI-2026-004",
+      title: "Isolation verification photo log",
+      summary: "Require a time-stamped photo of the locked isolation point attached to each permit before work starts, stored against the permit record.",
+      benefitCategory: "Process Safety",
+      fsrCategories: ["Energy Isolation"],
+      linkedIncident: "EVT-2026-0139",
+      submittedBy: "M. Okafor (Delivery Team)",
+      submittedAt: daysAgo(20),
+      status: ST.EXECUTION,
+      actionPlan: {
+        inspectionId: "INSP-2026-118",
+        actionSummary: "Roll out photo-verification step for all electrical and hydraulic isolations; brief permit issuers and update permit-to-work procedure.",
+        dueDate: new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10),
+        personResponsible: "M. Okafor",
+        comments: "Pilot on night shift first, then full rollout.",
+        createdAt: daysAgo(17),
+      },
+      log: [
+        { at: daysAgo(20), who: "M. Okafor", role: "Delivery Team", type: "sys", text: "Idea submitted." },
+        { at: daysAgo(18), who: "P. Anand", role: "ESL Lead", type: "sys", text: "Approved. Delivery Team to create Action Plan." },
+        { at: daysAgo(17), who: "M. Okafor", role: "Delivery Team", type: "sys", text: "Action Plan created (INSP-2026-118)." },
+      ],
+    }),
+    mk({
+      id: "ESI-2026-005",
+      title: "Gamified hazard-spotting app leaderboard",
+      summary: "Introduce a points leaderboard for hazard reports with monthly prizes to increase reporting volume.",
+      benefitCategory: "Occupational Health & Wellbeing",
+      fsrCategories: ["Line of Fire"],
+      submittedBy: "J. Rivera (Delivery Team)",
+      submittedAt: daysAgo(9),
+      status: ST.NON_VIABLE,
+      feedback: "Quantity-based incentives have previously driven low-quality reports and gaming of the system. Happy to revisit if the proposal is reframed around report quality and close-out rate rather than volume.",
+      log: [
+        { at: daysAgo(9), who: "J. Rivera", role: "Delivery Team", type: "sys", text: "Idea submitted." },
+        { at: daysAgo(7), who: "P. Anand", role: "ESL Lead", type: "sys", text: "Marked Non-Viable. Feedback provided for Delivery Team." },
+      ],
+    }),
+    mk({
+      id: "ESI-2026-006",
+      title: "Excavation permit ground-scan attachment",
+      summary: "Mandate an attached GPR scan result to every excavation permit within 5 m of recorded services, verified by the temporary works coordinator.",
+      benefitCategory: "Fatality & Serious Injury Prevention",
+      fsrCategories: ["Excavations & Ground Works", "Energy Isolation"],
+      linkedIncident: "EVT-2026-0087",
+      submittedBy: "S. Whitmore (Delivery Team)",
+      submittedAt: daysAgo(35),
+      status: ST.COMPLETE,
+      actionPlan: {
+        inspectionId: "INSP-2026-097",
+        actionSummary: "Update excavation permit form with mandatory GPR attachment; train TWCs on verification step.",
+        dueDate: daysAgo(8).slice(0, 10),
+        personResponsible: "S. Whitmore",
+        comments: "",
+        createdAt: daysAgo(30),
+        completedAt: daysAgo(5),
+      },
+      postImpl: {
+        completionComments: "Rolled out across all three work fronts. Two service strikes prevented during verification checks in the first fortnight.",
+        sme: "D. Kellerman (Geotechnical)",
+        caseStudyLink: "https://intranet.example.com/case-studies/esi-2026-006",
+        value: "2 prevented service strikes; est. £180k avoided cost and zero LTIs.",
+        submittedAt: daysAgo(5),
+      },
+      log: [
+        { at: daysAgo(35), who: "S. Whitmore", role: "Delivery Team", type: "sys", text: "Idea submitted." },
+        { at: daysAgo(32), who: "P. Anand", role: "ESL Lead", type: "sys", text: "Escalated to Project Leader." },
+        { at: daysAgo(31), who: "R. Castellanos", role: "Project Leader", type: "sys", text: "Approved. Delivery Team to create Action Plan." },
+        { at: daysAgo(30), who: "S. Whitmore", role: "Delivery Team", type: "sys", text: "Action Plan created (INSP-2026-097)." },
+        { at: daysAgo(5), who: "S. Whitmore", role: "Delivery Team", type: "sys", text: "Action Plan marked complete. Post-Implementation Form submitted." },
+      ],
+    }),
+  ];
+  state.seq = 7;
+  save();
+}
+
+/* =============================================================
+   Mutations
+============================================================= */
+function findIdea(id) { return state.ideas.find(i => i.id === id); }
+
+function addLog(idea, type, text) {
+  idea.log.push({ at: nowISO(), who: actorName(), role: ROLES[state.role], type, text });
+}
+function actorName() {
+  return { delivery: "Delivery Team", esl: "ESL Lead", pl: "Project Leader" }[state.role];
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function go(view) { state.view = view; render(); window.scrollTo({ top: 0 }); }
+
+/* =============================================================
+   Rendering
+============================================================= */
+const app = document.getElementById("app");
+
+function render() {
+  renderRoleSwitch();
+  const v = state.view;
+  if (v.name === "dashboard") app.innerHTML = viewDashboard();
+  else if (v.name === "submit") app.innerHTML = viewSubmit();
+  else if (v.name === "confirm") app.innerHTML = viewConfirm(v.id);
+  else if (v.name === "detail") app.innerHTML = viewDetail(v.id);
+  bindEvents();
+}
+
+function renderRoleSwitch() {
+  const el = document.getElementById("roleSwitch");
+  el.innerHTML = Object.entries(ROLES).map(([k, label]) =>
+    `<button data-role="${k}" class="${state.role === k ? "active" : ""}">${label}</button>`
+  ).join("");
+  el.querySelectorAll("button").forEach(b => b.onclick = () => {
+    state.role = b.dataset.role;
+    if (state.view.name === "submit" && state.role !== "delivery") state.view = { name: "dashboard" };
+    render();
+  });
+}
+
+/* ---------- Dashboard ---------- */
+function needsMyAction(idea) { return NEXT_ACTOR[idea.status] === state.role; }
+
+function viewDashboard() {
+  const ideas = [...state.ideas].sort((a, b) => {
+    const am = needsMyAction(a) ? 0 : 1, bm = needsMyAction(b) ? 0 : 1;
+    return am - bm || new Date(b.submittedAt) - new Date(a.submittedAt);
+  });
+
+  const counts = {
+    review: state.ideas.filter(i => [ST.PENDING_ESL, ST.PENDING_PL].includes(i.status)).length,
+    exec:   state.ideas.filter(i => [ST.APPROVED, ST.EXECUTION, ST.POST_IMPL].includes(i.status)).length,
+    done:   state.ideas.filter(i => i.status === ST.COMPLETE).length,
+    nv:     state.ideas.filter(i => [ST.NON_VIABLE, ST.CLOSED_NV].includes(i.status)).length,
+    mine:   state.ideas.filter(needsMyAction).length,
+  };
+
+  const roleBlurb = {
+    delivery: "Submit improvement ideas, build action plans for approved initiatives, and close them out with a post-implementation review.",
+    esl:      "Review submitted ideas: approve them for execution, escalate to the Project Leader, or mark them non-viable with feedback.",
+    pl:       "Decide on escalated initiatives: approve them for execution or mark them non-viable.",
+  }[state.role];
+
+  const rows = ideas.map(i => {
+    const m = STATUS_META[i.status];
+    return `
+    <div class="irow" data-open="${i.id}" role="button" tabindex="0">
+      <div class="main">
+        <div class="id">${i.id}</div>
+        <div class="title">${esc(i.title)}</div>
+        <div class="meta">
+          <span>${esc(i.submittedBy)}</span>
+          <span>Submitted ${fmtDate(i.submittedAt)}</span>
+          <span>${esc(i.benefitCategory)}</span>
+        </div>
+      </div>
+      <div class="side">
+        <span class="badge ${m.cls}">${m.label}</span>
+        ${needsMyAction(i) ? `<span class="action-chip">Your action needed</span>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+
+  return `
+    <div class="view-head">
+      <div>
+        <h1>Safety Initiatives</h1>
+        <p>${roleBlurb}</p>
+      </div>
+      ${state.role === "delivery" ? `<button class="btn btn-primary" data-nav="submit">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Submit Idea</button>` : ""}
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">${counts.mine}</div><div class="l">Need your action</div></div>
+      <div class="stat"><div class="n">${counts.review}</div><div class="l">In review</div></div>
+      <div class="stat"><div class="n">${counts.exec}</div><div class="l">In execution</div></div>
+      <div class="stat"><div class="n">${counts.done}</div><div class="l">Complete</div></div>
+      <div class="stat"><div class="n">${counts.nv}</div><div class="l">Non-viable</div></div>
+    </div>
+    <div class="ilist">${rows || `<div class="empty">No initiatives yet. Switch to the Delivery Team role to submit the first idea.</div>`}</div>
+    <p class="footer-note">Acting as <strong>${ROLES[state.role]}</strong> · data is stored locally in this browser.</p>`;
+}
+
+/* ---------- Stage 1: Idea Submission ---------- */
+function viewSubmit() {
+  const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}">${esc(e.label)}</option>`).join("");
+  const benefitOpts = BENEFIT_CATEGORIES.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+  const fsrChecks = FSR_CATEGORIES.map(f =>
+    `<label><input type="checkbox" name="fsr" value="${esc(f)}"> ${esc(f)}</label>`).join("");
+
+  return `
+    <button class="back" data-nav="dashboard">&larr; All initiatives</button>
+    <div class="view-head">
+      <div>
+        <h1>Submit an Idea</h1>
+        <p>One form, one submission. Your idea goes straight to the ESL Lead for review — you'll see the outcome and any feedback here.</p>
+      </div>
+    </div>
+    <form id="submitForm" class="card card-pad" novalidate>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="f-title">Initiative Title <span class="req">*</span></label>
+          <input type="text" id="f-title" maxlength="120" placeholder="Short, descriptive name for the idea">
+          <div class="err">Please give the initiative a title.</div>
+        </div>
+        <div class="field full">
+          <label for="f-summary">Summary <span class="req">*</span></label>
+          <textarea id="f-summary" placeholder="What is the idea, what problem does it solve, and how would it work?"></textarea>
+          <div class="err">Please describe the idea.</div>
+        </div>
+        <div class="field">
+          <label for="f-project">Project Name</label>
+          <input type="text" id="f-project" value="${esc(CURRENT_PROJECT)}" readonly>
+          <div class="help">Auto-filled from your current project.</div>
+        </div>
+        <div class="field">
+          <label for="f-name">Submitted By <span class="req">*</span></label>
+          <input type="text" id="f-name" placeholder="Your name">
+          <div class="err">Please enter your name.</div>
+        </div>
+        <div class="field">
+          <label for="f-benefit">Benefit Category <span class="req">*</span></label>
+          <select id="f-benefit">
+            <option value="">Select a category…</option>
+            ${benefitOpts}
+          </select>
+          <div class="err">Please choose a benefit category.</div>
+        </div>
+        <div class="field">
+          <label for="f-incident">Linked PC1 Incident <span class="opt">(optional)</span></label>
+          <select id="f-incident">
+            <option value="">No linked incident</option>
+            ${incidentOpts}
+          </select>
+          <div class="help">Link the Event ID if this idea responds to a PC1 incident.</div>
+        </div>
+        <div class="field full">
+          <label>FSR Category <span class="req">*</span> <span class="opt">(select all that apply)</span></label>
+          <div class="checks" id="f-fsr">${fsrChecks}</div>
+          <div class="err">Select at least one FSR category.</div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" data-nav="dashboard">Cancel</button>
+        <button type="submit" class="btn btn-primary">Submit Idea</button>
+      </div>
+    </form>`;
+}
+
+/* ---------- Submission confirmation ---------- */
+function viewConfirm(id) {
+  const idea = findIdea(id);
+  if (!idea) return viewDashboard();
+  return `
+    <div class="card confirm-hero">
+      <div class="tick">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1>Idea submitted</h1>
+      <div class="iid">${idea.id}</div>
+      <p><strong>${esc(idea.title)}</strong> is now with the ESL Lead for review. You can track its status from the initiatives list at any time.</p>
+      <div class="next-steps">
+        <h2>What happens next</h2>
+        <ol class="flow">
+          <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>The ESL Lead reviews your idea and either approves it, escalates it to the Project Leader, or marks it non-viable with feedback.</span></div></li>
+          <li><span class="n">2</span><div class="t"><b>Escalation decision (if escalated)</b><span>The Project Leader approves the initiative or marks it non-viable.</span></div></li>
+          <li><span class="n">3</span><div class="t"><b>Execution</b><span>Once approved, your team creates an Action Plan, delivers it, and closes out with a Post-Implementation Form.</span></div></li>
+        </ol>
+      </div>
+      <div style="margin-top:1.75rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" data-open="${idea.id}">View initiative</button>
+        <button class="btn btn-ghost" data-nav="dashboard">Back to all initiatives</button>
+      </div>
+    </div>`;
+}
+
+/* ---------- Stage tracker ---------- */
+function stageTracker(idea) {
+  const s = idea.status;
+  const dead = [ST.NON_VIABLE, ST.CLOSED_NV].includes(s);
+  const reviewDone = [ST.APPROVED, ST.EXECUTION, ST.POST_IMPL, ST.COMPLETE].includes(s);
+  const execDone = s === ST.COMPLETE;
+  const inReview = [ST.PENDING_ESL, ST.PENDING_PL].includes(s);
+
+  const st1 = `<div class="stage done"><span class="dot">✓</span>1 · Idea Submission</div>`;
+  let st2, st3;
+  if (dead) {
+    st2 = `<div class="stage dead"><span class="dot">✕</span>2 · Review — Non-Viable</div>`;
+    st3 = `<div class="stage"><span class="dot">3</span>3 · Execution</div>`;
+  } else {
+    st2 = reviewDone
+      ? `<div class="stage done"><span class="dot">✓</span>2 · Review</div>`
+      : `<div class="stage ${inReview ? "now" : ""}"><span class="dot">2</span>2 · Review</div>`;
+    st3 = execDone
+      ? `<div class="stage done"><span class="dot">✓</span>3 · Execution</div>`
+      : `<div class="stage ${reviewDone ? "now" : ""}"><span class="dot">3</span>3 · Execution</div>`;
+  }
+  return `<div class="stages">${st1}${st2}${st3}</div>`;
+}
+
+/* ---------- Detail view (Review + Execution) ---------- */
+function viewDetail(id) {
+  const idea = findIdea(id);
+  if (!idea) return viewDashboard();
+  const m = STATUS_META[idea.status];
+
+  const logHtml = idea.log.length
+    ? `<ul class="clog">${idea.log.map(l => `
+        <li class="${l.type === "sys" ? "sys" : ""}">
+          <div class="who">${esc(l.who)} <span class="r">· ${esc(l.role)}</span> <span class="when">· ${fmtDateTime(l.at)}</span></div>
+          <div class="txt">${esc(l.text)}</div>
+        </li>`).join("")}</ul>`
+    : `<p class="sub">No activity yet.</p>`;
+
+  return `
+    <button class="back" data-nav="dashboard">&larr; All initiatives</button>
+    <div class="view-head">
+      <div>
+        <div style="font-size:.8rem;font-weight:700;color:var(--primary);letter-spacing:.04em">${idea.id}</div>
+        <h1>${esc(idea.title)}</h1>
+      </div>
+      <span class="badge ${m.cls}" style="margin-top:.4rem">${m.label}</span>
+    </div>
+    ${stageTracker(idea)}
+    <div class="detail-grid">
+      <div>
+        <section class="card card-pad">
+          <h2>Summary</h2>
+          <div class="summary-block">${esc(idea.summary)}</div>
+          <div style="margin-top:1rem" class="kv">
+            <dt>Project</dt><dd>${esc(idea.project)}</dd>
+            <dt>Submitted by</dt><dd>${esc(idea.submittedBy)} · ${fmtDate(idea.submittedAt)}</dd>
+            <dt>Benefit category</dt><dd>${esc(idea.benefitCategory)}</dd>
+            <dt>FSR categories</dt><dd><span class="tags">${idea.fsrCategories.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+            <dt>Linked PC1 incident</dt><dd>${idea.linkedIncident ? esc(pc1Label(idea.linkedIncident)) : "None"}</dd>
+          </div>
+        </section>
+        ${sectionFeedback(idea)}
+        ${sectionActionPlan(idea)}
+        ${sectionPostImpl(idea)}
+        <section class="card card-pad">
+          <h2>Comments &amp; activity</h2>
+          <p class="sub">Full history of comments and workflow decisions.</p>
+          ${logHtml}
+          <div class="comment-box">
+            <textarea id="newComment" placeholder="Add a comment as ${ROLES[state.role]}…"></textarea>
+            <button class="btn btn-ghost" id="addComment">Add</button>
+          </div>
+        </section>
+      </div>
+      <div>
+        ${panelActions(idea)}
+      </div>
+    </div>`;
+}
+
+function pc1Label(id) {
+  const e = PC1_INCIDENTS.find(x => x.id === id);
+  return e ? e.label : id;
+}
+
+/* ---------- Non-viable feedback section ---------- */
+function sectionFeedback(idea) {
+  if (![ST.NON_VIABLE, ST.CLOSED_NV].includes(idea.status)) return "";
+  const decider = idea.decidedBy || "the reviewer";
+  return `
+    <section class="card card-pad">
+      <h2>Reviewer Feedback</h2>
+      <p class="sub">This initiative was marked non-viable by ${esc(decider)}.</p>
+      <div class="callout red"><div><strong>Feedback:</strong> ${esc(idea.feedback || "No feedback recorded.")}</div></div>
+      ${idea.status === ST.NON_VIABLE && state.role === "delivery" ? `
+        <div class="form-actions">
+          <button class="btn btn-primary" data-act="ack-feedback" data-id="${idea.id}">Acknowledge Feedback</button>
+        </div>
+        <p class="decision-note" style="margin-top:.5rem">Acknowledging confirms the Delivery Team has received this feedback and closes the initiative.</p>` : ""}
+      ${idea.status === ST.CLOSED_NV ? `<p class="decision-note" style="margin-top:.75rem">Feedback received by the Delivery Team · initiative closed.</p>` : ""}
+    </section>`;
+}
+
+/* ---------- Action Plan section ---------- */
+function sectionActionPlan(idea) {
+  const s = idea.status;
+
+  if (s === ST.APPROVED && state.role === "delivery") {
+    return `
+    <section class="card card-pad" id="apSection">
+      <h2>Create Action Plan</h2>
+      <p class="sub">Inspection ID and action summary are prefilled from the approved initiative — set the delivery details below.</p>
+      <div class="form-grid">
+        <div class="field">
+          <label for="ap-insp">Related Inspection ID</label>
+          <input type="text" id="ap-insp" value="${esc(pendingInspectionId(idea))}" readonly>
+          <div class="help">Prefilled · generated for this initiative.</div>
+        </div>
+        <div class="field">
+          <label for="ap-due">Due Date <span class="req">*</span></label>
+          <input type="date" id="ap-due" min="${new Date().toISOString().slice(0,10)}">
+          <div class="err">Please set a due date.</div>
+        </div>
+        <div class="field full">
+          <label for="ap-summary">Action Required Summary</label>
+          <textarea id="ap-summary" readonly style="background:var(--surface-2);color:var(--muted)">${esc(actionSummaryFor(idea))}</textarea>
+          <div class="help">Prefilled from the approved submission.</div>
+        </div>
+        <div class="field">
+          <label for="ap-person">Person Responsible <span class="req">*</span></label>
+          <input type="text" id="ap-person" placeholder="Name of the owner">
+          <div class="err">Please name the person responsible.</div>
+        </div>
+        <div class="field">
+          <label for="ap-comments">Comments <span class="opt">(optional)</span></label>
+          <input type="text" id="ap-comments" placeholder="Delivery notes, phasing, dependencies…">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" data-act="create-plan" data-id="${idea.id}">Create Action Plan</button>
+      </div>
+    </section>`;
+  }
+
+  if (s === ST.APPROVED) {
+    return `
+    <section class="card card-pad">
+      <h2>Action Plan</h2>
+      <div class="callout amber"><div>Waiting for the <strong>Delivery Team</strong> to create the Action Plan.</div></div>
+    </section>`;
+  }
+
+  if (!idea.actionPlan) return "";
+  const ap = idea.actionPlan;
+  return `
+    <section class="card card-pad">
+      <h2>Action Plan</h2>
+      <p class="sub">Created ${fmtDate(ap.createdAt)}${ap.completedAt ? ` · completed ${fmtDate(ap.completedAt)}` : ""}</p>
+      <div class="kv">
+        <dt>Related Inspection ID</dt><dd>${esc(ap.inspectionId)}</dd>
+        <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>
+        <dt>Due date</dt><dd>${fmtDate(ap.dueDate)}</dd>
+        <dt>Person responsible</dt><dd>${esc(ap.personResponsible)}</dd>
+        <dt>Comments</dt><dd>${esc(ap.comments || "—")}</dd>
+      </div>
+      ${s === ST.EXECUTION && state.role === "delivery" ? `
+        <div class="form-actions">
+          <button class="btn btn-green" data-act="mark-complete" data-id="${idea.id}">Mark Complete</button>
+        </div>
+        <p class="decision-note" style="margin-top:.5rem">Marking complete opens the Post-Implementation Form to close out the initiative.</p>` : ""}
+      ${s === ST.EXECUTION && state.role !== "delivery" ? `
+        <div class="callout teal" style="margin-top:1rem"><div>Action Plan in progress — the <strong>Delivery Team</strong> will mark it complete.</div></div>` : ""}
+    </section>`;
+}
+
+function pendingInspectionId(idea) {
+  if (!idea._pendingInsp) {
+    const num = 100 + (parseInt(idea.id.slice(-3), 10) * 7) % 900;
+    idea._pendingInsp = "INSP-2026-" + num;
+  }
+  return idea._pendingInsp;
+}
+function actionSummaryFor(idea) {
+  return "Implement approved initiative: " + idea.summary;
+}
+
+/* ---------- Post-Implementation section ---------- */
+function sectionPostImpl(idea) {
+  const s = idea.status;
+
+  if (s === ST.POST_IMPL && state.role === "delivery") {
+    return `
+    <section class="card card-pad" id="pifSection">
+      <h2>Post-Implementation Form</h2>
+      <p class="sub">Review the original submission below, then record the outcome to close out this initiative.</p>
+      <div class="callout teal" style="margin-bottom:1rem"><div>
+        <strong>Original submission:</strong> ${esc(idea.summary)}
+      </div></div>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="pif-comments">Completion Comments <span class="req">*</span></label>
+          <textarea id="pif-comments" placeholder="What was delivered, what changed, lessons learned…"></textarea>
+          <div class="err">Please add completion comments.</div>
+        </div>
+        <div class="field">
+          <label for="pif-sme">SME <span class="req">*</span></label>
+          <input type="text" id="pif-sme" placeholder="Subject matter expert consulted">
+          <div class="err">Please name the SME.</div>
+        </div>
+        <div class="field">
+          <label for="pif-link">Case Study Link <span class="opt">(optional)</span></label>
+          <input type="url" id="pif-link" placeholder="https://…">
+        </div>
+        <div class="field full">
+          <label for="pif-value">Value <span class="req">*</span></label>
+          <input type="text" id="pif-value" placeholder="Quantified or qualitative value delivered (e.g. incidents prevented, cost avoided)">
+          <div class="err">Please describe the value delivered.</div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-green" data-act="submit-pif" data-id="${idea.id}">Submit &amp; Complete Initiative</button>
+      </div>
+    </section>`;
+  }
+
+  if (s === ST.POST_IMPL) {
+    return `
+    <section class="card card-pad">
+      <h2>Post-Implementation Form</h2>
+      <div class="callout amber"><div>Waiting for the <strong>Delivery Team</strong> to complete the Post-Implementation Form.</div></div>
+    </section>`;
+  }
+
+  if (!idea.postImpl) return "";
+  const p = idea.postImpl;
+  return `
+    <section class="card card-pad">
+      <h2>Post-Implementation Review</h2>
+      <p class="sub">Submitted ${fmtDate(p.submittedAt)}</p>
+      <div class="kv">
+        <dt>Completion comments</dt><dd>${esc(p.completionComments)}</dd>
+        <dt>SME</dt><dd>${esc(p.sme)}</dd>
+        <dt>Case study</dt><dd>${p.caseStudyLink ? `<a href="${esc(p.caseStudyLink)}" target="_blank" rel="noopener">${esc(p.caseStudyLink)}</a>` : "—"}</dd>
+        <dt>Value</dt><dd>${esc(p.value)}</dd>
+      </div>
+    </section>`;
+}
+
+/* ---------- Right-hand action panel ---------- */
+function panelActions(idea) {
+  const s = idea.status;
+
+  /* Stage 2 — ESL Lead review */
+  if (s === ST.PENDING_ESL) {
+    if (state.role === "esl") {
+      return `
+      <section class="card card-pad">
+        <h2>ESL Lead Decision</h2>
+        <p class="sub">Review the initiative and choose an outcome. Comments can be added in the activity panel.</p>
+        <div class="decisions">
+          <button class="btn btn-green" data-act="approve" data-id="${idea.id}">Approve</button>
+          <p class="decision-note">Approve for execution — the Delivery Team creates an Action Plan.</p>
+          <button class="btn btn-purple" data-act="escalate" data-id="${idea.id}">Escalate to Project Leader</button>
+          <p class="decision-note">Send to the Project Leader when the decision is above ESL authority.</p>
+          <button class="btn btn-red" data-act="show-nv" data-id="${idea.id}">Mark Non-Viable</button>
+          <div class="reveal" id="nvReveal" hidden>
+            <h3>Feedback for the Delivery Team <span class="req">*</span></h3>
+            <div class="field">
+              <textarea id="nvFeedback" placeholder="Explain why the idea is non-viable and what could make it viable."></textarea>
+              <div class="err">Feedback is required when marking an idea non-viable.</div>
+            </div>
+            <div class="form-actions" style="border:none;padding-top:.75rem;margin-top:0">
+              <button class="btn btn-ghost btn-sm" data-act="hide-nv">Cancel</button>
+              <button class="btn btn-red btn-sm" data-act="confirm-nv" data-id="${idea.id}">Confirm Non-Viable</button>
+            </div>
+          </div>
+        </div>
+      </section>`;
+    }
+    return waitingPanel("ESL Lead", "This initiative is awaiting ESL Lead review. Switch role to ESL Lead to action it.");
+  }
+
+  /* Stage 2 — Project Leader review */
+  if (s === ST.PENDING_PL) {
+    if (state.role === "pl") {
+      return `
+      <section class="card card-pad">
+        <h2>Project Leader Decision</h2>
+        <p class="sub">This initiative was escalated by the ESL Lead. Approve it for execution or mark it non-viable.</p>
+        <div class="decisions">
+          <button class="btn btn-green" data-act="approve" data-id="${idea.id}">Approve</button>
+          <p class="decision-note">Approve for execution — the Delivery Team creates an Action Plan.</p>
+          <button class="btn btn-red" data-act="show-nv" data-id="${idea.id}">Mark Non-Viable</button>
+          <div class="reveal" id="nvReveal" hidden>
+            <h3>Feedback for the Delivery Team <span class="req">*</span></h3>
+            <div class="field">
+              <textarea id="nvFeedback" placeholder="Explain the decision so the Delivery Team can learn from it."></textarea>
+              <div class="err">Feedback is required when marking an idea non-viable.</div>
+            </div>
+            <div class="form-actions" style="border:none;padding-top:.75rem;margin-top:0">
+              <button class="btn btn-ghost btn-sm" data-act="hide-nv">Cancel</button>
+              <button class="btn btn-red btn-sm" data-act="confirm-nv" data-id="${idea.id}">Confirm Non-Viable</button>
+            </div>
+          </div>
+        </div>
+      </section>`;
+    }
+    return waitingPanel("Project Leader", "This initiative has been escalated and is awaiting the Project Leader's decision.");
+  }
+
+  if (s === ST.APPROVED)  return waitingPanel("Delivery Team", "Approved for execution. The Delivery Team creates the Action Plan on this page.", state.role === "delivery");
+  if (s === ST.EXECUTION) return waitingPanel("Delivery Team", "The Action Plan is in progress. The Delivery Team marks it complete when done.", state.role === "delivery");
+  if (s === ST.POST_IMPL) return waitingPanel("Delivery Team", "Action Plan complete — the Post-Implementation Form on this page closes out the initiative.", state.role === "delivery");
+  if (s === ST.COMPLETE) {
+    return `<section class="card card-pad"><h2>Status</h2>
+      <div class="callout green"><div><strong>Initiative complete.</strong> The Action Plan was delivered and the Post-Implementation Review is on record.</div></div></section>`;
+  }
+  if (s === ST.NON_VIABLE) {
+    return `<section class="card card-pad"><h2>Status</h2>
+      <div class="callout red"><div><strong>Marked non-viable.</strong> Feedback is available for the Delivery Team on this page.</div></div></section>`;
+  }
+  if (s === ST.CLOSED_NV) {
+    return `<section class="card card-pad"><h2>Status</h2>
+      <div class="callout red"><div><strong>Closed — non-viable.</strong> The Delivery Team has received the feedback.</div></div></section>`;
+  }
+  return "";
+}
+
+function waitingPanel(owner, text, isYou = false) {
+  return `<section class="card card-pad"><h2>Next Step</h2>
+    <div class="callout ${isYou ? "teal" : "amber"}"><div>${isYou ? "<strong>Over to you.</strong> " : `Owned by the <strong>${owner}</strong>. `}${text}</div></div></section>`;
+}
+
+/* =============================================================
+   Event wiring
+============================================================= */
+function bindEvents() {
+  /* Navigation */
+  app.querySelectorAll("[data-nav]").forEach(el => el.onclick = () => go({ name: el.dataset.nav }));
+  app.querySelectorAll("[data-open]").forEach(el => {
+    const open = () => go({ name: "detail", id: el.dataset.open });
+    el.onclick = open;
+    el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+  });
+
+  /* Submission form */
+  const form = document.getElementById("submitForm");
+  if (form) form.onsubmit = handleSubmitIdea;
+
+  /* Comments */
+  const addC = document.getElementById("addComment");
+  if (addC) addC.onclick = () => {
+    const ta = document.getElementById("newComment");
+    const text = ta.value.trim();
+    if (!text) { toast("Write a comment first."); return; }
+    const idea = findIdea(state.view.id);
+    addLog(idea, "comment", text);
+    save(); render();
+    toast("Comment added.");
+  };
+
+  /* Decision & workflow actions */
+  app.querySelectorAll("[data-act]").forEach(el => el.onclick = () => handleAction(el.dataset.act, el.dataset.id));
+}
+
+function markInvalid(input, bad) {
+  const f = input.closest(".field");
+  if (f) f.classList.toggle("invalid", bad);
+  return bad;
+}
+
+function handleSubmitIdea(e) {
+  e.preventDefault();
+  const title   = document.getElementById("f-title");
+  const summary = document.getElementById("f-summary");
+  const name    = document.getElementById("f-name");
+  const benefit = document.getElementById("f-benefit");
+  const fsrWrap = document.getElementById("f-fsr");
+  const fsr = [...fsrWrap.querySelectorAll("input:checked")].map(c => c.value);
+
+  let bad = false;
+  bad = markInvalid(title, !title.value.trim()) || bad;
+  bad = markInvalid(summary, !summary.value.trim()) || bad;
+  bad = markInvalid(name, !name.value.trim()) || bad;
+  bad = markInvalid(benefit, !benefit.value) || bad;
+  fsrWrap.closest(".field").classList.toggle("invalid", fsr.length === 0);
+  bad = bad || fsr.length === 0;
+  if (bad) { toast("Please complete the required fields."); return; }
+
+  const idea = {
+    id: nextId(),
+    title: title.value.trim(),
+    summary: summary.value.trim(),
+    project: CURRENT_PROJECT,
+    benefitCategory: benefit.value,
+    fsrCategories: fsr,
+    linkedIncident: document.getElementById("f-incident").value,
+    submittedBy: name.value.trim() + " (Delivery Team)",
+    submittedAt: nowISO(),
+    status: ST.PENDING_ESL,
+    feedback: "",
+    actionPlan: null,
+    postImpl: null,
+    log: [{ at: nowISO(), who: name.value.trim(), role: "Delivery Team", type: "sys", text: "Idea submitted." }],
+  };
+  state.ideas.unshift(idea);
+  save();
+  go({ name: "confirm", id: idea.id });
+}
+
+function handleAction(act, id) {
+  const idea = id ? findIdea(id) : null;
+
+  switch (act) {
+    case "approve": {
+      idea.status = ST.APPROVED;
+      idea.decidedBy = ROLES[state.role];
+      addLog(idea, "sys", "Approved. Delivery Team to create Action Plan.");
+      save(); render(); toast("Initiative approved.");
+      break;
+    }
+    case "escalate": {
+      idea.status = ST.PENDING_PL;
+      addLog(idea, "sys", "Escalated to Project Leader.");
+      save(); render(); toast("Escalated to Project Leader.");
+      break;
+    }
+    case "show-nv": {
+      const r = document.getElementById("nvReveal");
+      if (r) { r.hidden = false; document.getElementById("nvFeedback").focus(); }
+      break;
+    }
+    case "hide-nv": {
+      const r = document.getElementById("nvReveal");
+      if (r) r.hidden = true;
+      break;
+    }
+    case "confirm-nv": {
+      const fb = document.getElementById("nvFeedback");
+      if (!fb.value.trim()) { markInvalid(fb, true); toast("Feedback is required."); return; }
+      idea.status = ST.NON_VIABLE;
+      idea.feedback = fb.value.trim();
+      idea.decidedBy = ROLES[state.role];
+      addLog(idea, "sys", "Marked Non-Viable. Feedback provided for Delivery Team.");
+      save(); render(); toast("Marked non-viable — feedback sent to Delivery Team.");
+      break;
+    }
+    case "ack-feedback": {
+      idea.status = ST.CLOSED_NV;
+      addLog(idea, "sys", "Feedback received by Delivery Team. Initiative closed.");
+      save(); render(); toast("Feedback acknowledged.");
+      break;
+    }
+    case "create-plan": {
+      const due = document.getElementById("ap-due");
+      const person = document.getElementById("ap-person");
+      let bad = false;
+      bad = markInvalid(due, !due.value) || bad;
+      bad = markInvalid(person, !person.value.trim()) || bad;
+      if (bad) { toast("Please complete the required fields."); return; }
+      idea.actionPlan = {
+        inspectionId: document.getElementById("ap-insp").value,
+        actionSummary: document.getElementById("ap-summary").value,
+        dueDate: due.value,
+        personResponsible: person.value.trim(),
+        comments: document.getElementById("ap-comments").value.trim(),
+        createdAt: nowISO(),
+      };
+      delete idea._pendingInsp;
+      idea.status = ST.EXECUTION;
+      addLog(idea, "sys", `Action Plan created (${idea.actionPlan.inspectionId}).`);
+      save(); render(); toast("Action Plan created.");
+      break;
+    }
+    case "mark-complete": {
+      idea.actionPlan.completedAt = nowISO();
+      idea.status = ST.POST_IMPL;
+      addLog(idea, "sys", "Action Plan marked complete. Post-Implementation Form opened.");
+      save(); render(); toast("Marked complete — finish the Post-Implementation Form.");
+      break;
+    }
+    case "submit-pif": {
+      const comments = document.getElementById("pif-comments");
+      const sme = document.getElementById("pif-sme");
+      const value = document.getElementById("pif-value");
+      let bad = false;
+      bad = markInvalid(comments, !comments.value.trim()) || bad;
+      bad = markInvalid(sme, !sme.value.trim()) || bad;
+      bad = markInvalid(value, !value.value.trim()) || bad;
+      if (bad) { toast("Please complete the required fields."); return; }
+      idea.postImpl = {
+        completionComments: comments.value.trim(),
+        sme: sme.value.trim(),
+        caseStudyLink: document.getElementById("pif-link").value.trim(),
+        value: value.value.trim(),
+        submittedAt: nowISO(),
+      };
+      idea.status = ST.COMPLETE;
+      addLog(idea, "sys", "Post-Implementation Form submitted. Initiative complete.");
+      save(); render(); toast("Initiative complete. 🎉");
+      break;
+    }
+  }
+}
+
+/* =============================================================
+   Boot
+============================================================= */
+["input", "change"].forEach(ev => app.addEventListener(ev, e => {
+  const f = e.target.closest && e.target.closest(".field");
+  if (f) f.classList.remove("invalid");
+}));
+
+if (!load()) seed();
+render();
+</script>
+</body>
+</html>
