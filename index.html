@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submit a Safety Idea · Fremantle Bridges Alliance</title>
+<style>
+  :root{
+    --bg:#f2f2f0;
+    --surface:#ffffff;
+    --soft:#f4f5f6;
+    --ink:#2e3234;
+    --muted:#878d92;
+    --label:#3c4043;
+    --line:#e2e4e6;
+    --input-line:#cfd4d7;
+    --teal:#00a3ad;
+    --teal-dark:#00858d;
+    --teal-soft:#e0f4f5;
+    --red:#e63c2f;
+    --red-dark:#c92e22;
+    --red-soft:#fdecea;
+    --green:#3f9d46;
+    --green-soft:#e9f5ea;
+    --amber:#b26a00;
+    --amber-soft:#fdf3e3;
+    --info-bg:#e9f2fb;
+    --info-ink:#2e6da4;
+    --radius:10px;
+    --shadow:0 1px 3px rgba(40,45,50,.08),0 4px 14px rgba(40,45,50,.05);
+    --font:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;min-height:100vh}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:.92rem;color:var(--ink)}
+  a{color:var(--teal-dark)}
+
+  .wrap{max-width:900px;margin:0 auto;padding:1.25rem 1.25rem 3.5rem}
+
+  /* ---------- Page header ---------- */
+  .crumb{font-size:.75rem;color:var(--muted);margin-bottom:.35rem}
+  .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+  .page-head h1{font-size:1.5rem;font-weight:700;letter-spacing:-.01em}
+  .page-head .alliance{font-size:.85rem;color:var(--muted)}
+  .head-side{display:flex;flex-direction:column;align-items:flex-end;gap:.3rem}
+  .saved{font-size:.8rem;color:var(--green);font-weight:600;visibility:hidden}
+  .saved.show{visibility:visible}
+  .role-chip{display:inline-flex;align-items:center;gap:.4rem;background:var(--teal-soft);color:var(--teal-dark);font-size:.78rem;font-weight:700;border-radius:999px;padding:.25rem .8rem}
+  .role-chip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--teal)}
+
+  /* ---------- Workflow tracker ---------- */
+  .tracker{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:1rem 1.25rem 1.15rem;margin-bottom:1.1rem}
+  .tracker-top{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;font-size:.8rem;margin-bottom:.5rem}
+  .tracker-top .stage-label{font-weight:700;color:var(--label)}
+  .tracker-top .pct{color:var(--muted)}
+  .tracker-bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-bottom:1.1rem}
+  .tracker-bar span{display:block;height:100%;background:var(--teal);border-radius:2px;transition:width .3s}
+  .steps{display:flex}
+  .step{flex:1;min-width:0;position:relative;text-align:center;background:none;border:none;padding:0 .25rem;color:inherit}
+  .step::before{content:"";position:absolute;top:15px;left:calc(-50% + 16px);width:calc(100% - 32px);height:3px;background:var(--line);border-radius:2px}
+  .step:first-child::before{display:none}
+  .step.s-done::before,.step.s-dead::before{background:var(--teal)}
+  .step .dot{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;background:#fff;border:2px solid var(--input-line);color:var(--muted);font-weight:700;font-size:.82rem;display:inline-flex;align-items:center;justify-content:center;transition:transform .12s}
+  .step .name{display:block;font-size:.76rem;font-weight:700;color:var(--muted);margin-top:.35rem;line-height:1.25}
+  .step .role{display:block;font-size:.68rem;color:var(--muted);font-weight:500}
+  .step.s-done .dot{background:var(--teal);border-color:var(--teal);color:#fff}
+  .step.s-done .name{color:var(--teal-dark)}
+  .step.s-now .dot{background:var(--teal);border-color:var(--teal);color:#fff;box-shadow:0 0 0 4px var(--teal-soft)}
+  .step.s-now .name{color:var(--ink)}
+  .step.s-dead .dot{background:var(--red);border-color:var(--red);color:#fff}
+  .step.s-dead .name{color:var(--red)}
+  .step:hover .dot{transform:scale(1.1)}
+  .step.viewing .name{text-decoration:underline;text-underline-offset:3px}
+  .tracker-hint{text-align:center;font-size:.7rem;color:var(--muted);margin-top:.8rem}
+
+  /* ---------- Cards ---------- */
+  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.4rem 1.5rem}
+  .card + .card{margin-top:1rem}
+  .card h2{font-size:1.02rem;margin-bottom:.2rem}
+  .card .sub{color:var(--muted);font-size:.84rem;margin-bottom:1rem}
+
+  .info-banner{display:flex;gap:.6rem;align-items:flex-start;background:var(--info-bg);color:var(--info-ink);border-radius:8px;padding:.7rem .9rem;font-size:.84rem;margin-bottom:1.2rem}
+  .info-banner .i{flex:none;width:18px;height:18px;border-radius:50%;background:var(--info-ink);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;font-style:normal;margin-top:.1rem}
+
+  .callout{border-radius:8px;padding:.85rem 1rem;font-size:.88rem}
+  .callout.red{background:var(--red-soft);color:var(--red-dark)}
+  .callout.green{background:var(--green-soft);color:var(--green)}
+  .callout.amber{background:var(--amber-soft);color:var(--amber)}
+  .callout.teal{background:var(--teal-soft);color:var(--teal-dark)}
+
+  /* ---------- Forms ---------- */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.05rem 1.5rem}
+  .form-grid .full{grid-column:1/-1}
+  @media(max-width:680px){.form-grid{grid-template-columns:1fr}}
+  .field label{display:block;font-size:.78rem;font-weight:700;color:var(--label);margin-bottom:.35rem}
+  .field label .req{color:var(--red)}
+  .field label .hint{color:var(--muted);font-weight:500}
+  .field input[type=text],.field input[type=url],.field input[type=date],.field select,.field textarea{
+    width:100%;border:1px solid var(--input-line);border-radius:6px;padding:.6rem .7rem;background:#fff;transition:border-color .15s,box-shadow .15s}
+  .field textarea{min-height:96px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+  .field .auto{background:var(--soft)!important;color:#5f6368}
+  .field .help{font-size:.73rem;color:var(--muted);margin-top:.3rem}
+  .field.invalid input,.field.invalid select,.field.invalid textarea{border-color:var(--red)}
+  .field .err{display:none;font-size:.74rem;color:var(--red);font-weight:600;margin-top:.3rem}
+  .field.invalid .err{display:block}
+  .checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.4rem .8rem;border:1px solid var(--input-line);border-radius:6px;padding:.7rem .8rem}
+  .checks label{display:flex;align-items:center;gap:.5rem;font-size:.86rem;font-weight:500;margin:0;cursor:pointer;color:var(--ink)}
+  .checks input{accent-color:var(--teal);width:15px;height:15px}
+  .form-actions{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--line);flex-wrap:wrap}
+  .form-actions .right{display:flex;gap:.75rem;margin-left:auto}
+
+  /* ---------- Buttons ---------- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border-radius:6px;border:1.5px solid transparent;font-weight:700;font-size:.9rem;padding:.6rem 1.3rem;transition:background .15s,color .15s}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-red{background:var(--red);color:#fff}
+  .btn-red:hover{background:var(--red-dark)}
+  .btn-red-outline{background:#fff;border-color:var(--red);color:var(--red)}
+  .btn-red-outline:hover{background:var(--red-soft)}
+  .btn-teal{background:var(--teal);color:#fff}
+  .btn-teal:hover{background:var(--teal-dark)}
+  .btn-teal-outline{background:#fff;border-color:var(--teal);color:var(--teal-dark)}
+  .btn-teal-outline:hover{background:var(--teal-soft)}
+  .btn-ghost{background:#fff;border-color:var(--input-line);color:var(--label)}
+  .btn-ghost:hover{background:var(--soft)}
+  .btn-sm{padding:.4rem .85rem;font-size:.8rem}
+
+  /* ---------- Summary / recap ---------- */
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:.4rem 1.4rem;font-size:.88rem}
+  .kv dt{color:var(--muted);font-weight:600;white-space:nowrap}
+  .kv dd{min-width:0;overflow-wrap:anywhere}
+  .tags{display:flex;flex-wrap:wrap;gap:.35rem}
+  .tag{background:var(--soft);border:1px solid var(--line);border-radius:5px;font-size:.75rem;font-weight:600;padding:.1rem .5rem;color:var(--label)}
+  .summary-block{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;font-size:.9rem;white-space:pre-wrap;margin-bottom:1rem}
+  .iid{font-size:.8rem;font-weight:700;color:var(--teal-dark);letter-spacing:.05em}
+
+  /* ---------- Decisions ---------- */
+  .decisions{display:flex;flex-direction:column;gap:.9rem;margin-top:.4rem}
+  .decision{display:flex;gap:1rem;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:.9rem 1rem}
+  .decision .btn{flex:none;min-width:170px}
+  .decision p{font-size:.8rem;color:var(--muted)}
+  .reveal{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:1rem}
+  .reveal h3{font-size:.88rem;margin-bottom:.6rem}
+
+  /* ---------- Comments ---------- */
+  .clog{list-style:none;display:flex;flex-direction:column;gap:.7rem;max-height:300px;overflow-y:auto}
+  .clog li{border-left:3px solid var(--line);padding:.1rem 0 .1rem .8rem}
+  .clog li.sys{border-left-color:var(--teal)}
+  .clog .who{font-size:.78rem;font-weight:700}
+  .clog .who .r{color:var(--muted);font-weight:500}
+  .clog .txt{font-size:.86rem;margin-top:.05rem;white-space:pre-wrap}
+  .comment-box{display:flex;gap:.5rem;margin-top:.9rem}
+  .comment-box textarea{flex:1;min-height:44px;border:1px solid var(--input-line);border-radius:6px;padding:.5rem .65rem}
+
+  /* ---------- Confirmation / terminal ---------- */
+  .hero{text-align:center;padding:2.25rem 1.5rem 2rem}
+  .hero .mark{width:62px;height:62px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem}
+  .hero .mark.ok{background:var(--green-soft);color:var(--green)}
+  .hero .mark.bad{background:var(--red-soft);color:var(--red)}
+  .hero h2{font-size:1.35rem;margin-bottom:.3rem}
+  .hero p{color:var(--muted);max-width:56ch;margin:.5rem auto 0;font-size:.92rem}
+  .flow{list-style:none;max-width:540px;margin:1.4rem auto 0;text-align:left}
+  .flow li{display:flex;gap:.85rem;position:relative;padding-bottom:1rem}
+  .flow li:last-child{padding-bottom:0}
+  .flow li::before{content:"";position:absolute;left:13px;top:28px;bottom:2px;width:2px;background:var(--line)}
+  .flow li:last-child::before{display:none}
+  .flow .n{width:28px;height:28px;border-radius:50%;background:var(--teal-soft);color:var(--teal-dark);font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex:none;position:relative;z-index:1}
+  .flow .t{font-size:.88rem}
+  .flow .t b{display:block}
+  .flow .t span{color:var(--muted);font-size:.8rem}
+  .hero-actions{margin-top:1.75rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+
+  /* ---------- Peek (recap / preview of a clicked step) ---------- */
+  .peek-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+  .peek-head .t{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .peek-head .t.done{color:var(--green)}
+  .peek-head .t.next{color:var(--teal-dark)}
+  .peek-head .t.dead{color:var(--red)}
+  .outcomes{list-style:none;display:flex;flex-direction:column;gap:.5rem;margin-top:.9rem}
+  .outcomes li{display:flex;gap:.6rem;align-items:flex-start;font-size:.86rem}
+  .outcomes .b{flex:none;width:8px;height:8px;border-radius:50%;background:var(--teal);margin-top:.45rem}
+
+  #toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:.65rem 1.2rem;border-radius:8px;font-size:.88rem;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .foot{margin-top:2rem;text-align:center;font-size:.73rem;color:var(--muted)}
+  .foot button{background:none;border:none;color:var(--muted);font-size:.73rem;text-decoration:underline;text-underline-offset:2px}
+  .foot button:hover{color:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="crumb">Home › Idea Workflow</div>
+  <div class="page-head">
+    <div>
+      <h1 id="pageTitle">Submit a Safety Idea</h1>
+      <div class="alliance">Fremantle Bridges Alliance · FBA</div>
+    </div>
+    <div class="head-side">
+      <span class="role-chip" id="roleChip">Acting as: Delivery Team</span>
+      <span class="saved" id="savedTag">✓ Draft auto-saved</span>
+    </div>
+  </div>
+
+  <div class="tracker" id="tracker"></div>
+  <div id="stage"></div>
+
+  <div class="foot">
+    All data is stored locally in this browser · <button id="resetBtn" type="button">Reset workflow</button>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+
+/* =============================================================
+   Reference data
+============================================================= */
+const PROFILE = { name: "Jake Anderson", project: "Fremantle Bridges Alliance" };
+
+const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Handover"];
+
+const BENEFIT_CATEGORIES = [
+  "Fatality & Serious Injury Prevention",
+  "Occupational Health & Wellbeing",
+  "Environmental Protection",
+  "Process Safety",
+  "Quality & Assurance",
+  "Efficiency & Cost Reduction",
+];
+
+const FSR_CATEGORIES = [
+  "Working at Height", "Lifting Operations", "Mobile Plant & Driving",
+  "Energy Isolation", "Confined Spaces", "Excavations & Ground Works",
+  "Line of Fire", "Dropped Objects", "Temporary Works",
+];
+
+const PC1_INCIDENTS = [
+  { id: "EVT-2026-0041", label: "EVT-2026-0041 · Dropped scaffold tube, North Pylon" },
+  { id: "EVT-2026-0087", label: "EVT-2026-0087 · Excavator near-miss with live cable" },
+  { id: "EVT-2026-0102", label: "EVT-2026-0102 · Uncontrolled load swing during girder lift" },
+  { id: "EVT-2026-0139", label: "EVT-2026-0139 · Stored energy release, hydraulic line" },
+  { id: "EVT-2026-0155", label: "EVT-2026-0155 · Worker in exclusion zone during reversing" },
+];
+
+/* Statuses (one idea moves through these) */
+const S = {
+  DRAFT: "draft",           // Delivery Team filling the form
+  CONFIRM: "confirm",       // submission confirmation screen
+  ESL: "review-esl",        // ESL Lead review
+  PL: "review-pl",          // Project Leader decision (escalated)
+  PLAN: "plan",             // Delivery Team creates Action Plan
+  EXECUTION: "execution",   // Action Plan in progress
+  POST: "post-impl",        // Post-Implementation Form
+  COMPLETE: "complete",
+  FEEDBACK: "feedback",     // non-viable, Delivery Team receives feedback
+  CLOSED: "closed",         // feedback acknowledged
+};
+
+const ROLE_FOR_STATUS = {
+  [S.DRAFT]: "Delivery Team", [S.CONFIRM]: "Delivery Team",
+  [S.ESL]: "ESL Lead", [S.PL]: "Project Leader",
+  [S.PLAN]: "Delivery Team", [S.EXECUTION]: "Delivery Team",
+  [S.POST]: "Delivery Team", [S.COMPLETE]: "Delivery Team",
+  [S.FEEDBACK]: "Delivery Team", [S.CLOSED]: "Delivery Team",
+};
+
+const TITLE_FOR_STATUS = {
+  [S.DRAFT]: "Submit a Safety Idea", [S.CONFIRM]: "Idea Submitted",
+  [S.ESL]: "ESL Lead Review", [S.PL]: "Project Leader Decision",
+  [S.PLAN]: "Create Action Plan", [S.EXECUTION]: "Action Plan in Progress",
+  [S.POST]: "Post-Implementation Form", [S.COMPLETE]: "Initiative Complete",
+  [S.FEEDBACK]: "Reviewer Feedback", [S.CLOSED]: "Initiative Closed",
+};
+
+/* =============================================================
+   State & persistence
+============================================================= */
+const KEY = "es-flow-v2";
+let idea = null;
+let peek = null; // key of a tracker step being viewed (recap/preview), or null
+
+function freshIdea() {
+  return {
+    status: S.DRAFT,
+    id: null,
+    escalated: false,
+    draft: {
+      project: PROFILE.project, submitter: PROFILE.name,
+      date: new Date().toISOString().slice(0, 10),
+      siteLocation: "", phase: "", title: "", summary: "",
+      benefit: "", fsr: [], incident: "",
+    },
+    submission: null,      // frozen copy on submit
+    decisions: {},         // esl: {outcome, feedback?, at}, pl: {...}
+    actionPlan: null,
+    postImpl: null,
+    log: [],
+  };
+}
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(idea)); } catch (e) {} }
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const d = JSON.parse(raw); if (d && d.status) return d; }
+  } catch (e) {}
+  return null;
+}
+
+function nextInitiativeId() {
+  let n = 1;
+  try { n = parseInt(localStorage.getItem(KEY + "-seq") || "1", 10); localStorage.setItem(KEY + "-seq", String(n + 1)); } catch (e) {}
+  return "ESI-2026-" + String(n).padStart(3, "0");
+}
+
+const nowISO = () => new Date().toISOString();
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + ", " +
+         d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function addLog(type, text, who, role) {
+  idea.log.push({ at: nowISO(), who: who || actorName(), role: role || ROLE_FOR_STATUS[idea.status], type, text });
+}
+function actorName() {
+  const r = ROLE_FOR_STATUS[idea.status];
+  return r === "Delivery Team" ? (idea.submission ? idea.submission.submitter : PROFILE.name) : r;
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+/* =============================================================
+   Workflow path model — drives the clickable tracker
+============================================================= */
+function buildPath() {
+  const nonViable = [S.FEEDBACK, S.CLOSED].includes(idea.status);
+  const nodes = [
+    { key: "submit", name: "Submit Idea", role: "Delivery Team" },
+    { key: "esl", name: "ESL Review", role: "ESL Lead" },
+  ];
+  if (idea.escalated) nodes.push({ key: "pl", name: "Project Leader Decision", role: "Project Leader" });
+  if (nonViable) {
+    nodes.push({ key: "feedback", name: "Receive Feedback", role: "Delivery Team" });
+  } else {
+    nodes.push(
+      { key: "plan", name: "Action Plan", role: "Delivery Team" },
+      { key: "postimpl", name: "Post-Implementation", role: "Delivery Team" },
+      { key: "done", name: "Complete", role: "Delivery Team" },
+    );
+  }
+  return nodes;
+}
+
+function currentKey() {
+  switch (idea.status) {
+    case S.DRAFT: case S.CONFIRM: return "submit";
+    case S.ESL: return "esl";
+    case S.PL: return "pl";
+    case S.PLAN: case S.EXECUTION: return "plan";
+    case S.POST: return "postimpl";
+    case S.COMPLETE: return "done";
+    case S.FEEDBACK: case S.CLOSED: return "feedback";
+  }
+}
+
+/* State of each node: done | now | dead | next */
+function nodeStates(nodes) {
+  const cur = nodes.findIndex(n => n.key === currentKey());
+  const terminal = [S.COMPLETE, S.CLOSED].includes(idea.status);
+  return nodes.map((n, i) => {
+    if (n.key === "esl" && idea.decisions.esl?.outcome === "non-viable") return "dead";
+    if (n.key === "pl" && idea.decisions.pl?.outcome === "non-viable") return "dead";
+    if (i < cur) return "done";
+    if (i === cur) return terminal ? "done" : "now";
+    return "next";
+  });
+}
+
+/* =============================================================
+   Rendering
+============================================================= */
+const $tracker = document.getElementById("tracker");
+const $stage = document.getElementById("stage");
+const $title = document.getElementById("pageTitle");
+const $roleChip = document.getElementById("roleChip");
+const $saved = document.getElementById("savedTag");
+
+function render() {
+  const nodes = buildPath();
+  const states = nodeStates(nodes);
+  const cur = nodes.findIndex(n => n.key === currentKey());
+  const terminal = [S.COMPLETE, S.CLOSED].includes(idea.status);
+  const doneCount = states.filter(s => s === "done" || s === "dead").length;
+  const pct = terminal ? 100 : Math.round((doneCount / nodes.length) * 100);
+
+  $title.textContent = TITLE_FOR_STATUS[idea.status];
+  $roleChip.textContent = "Acting as: " + ROLE_FOR_STATUS[idea.status];
+  $saved.classList.toggle("show", false);
+
+  $tracker.innerHTML = `
+    <div class="tracker-top">
+      <span class="stage-label">Stage ${Math.min(cur + 1, nodes.length)} of ${nodes.length} — ${esc(nodes[cur].name)} (${esc(nodes[cur].role)})</span>
+      <span class="pct">${pct}% complete</span>
+    </div>
+    <div class="tracker-bar"><span style="width:${pct}%"></span></div>
+    <div class="steps">
+      ${nodes.map((n, i) => `
+        <button class="step s-${states[i]} ${peek === n.key ? "viewing" : ""}" data-step="${n.key}"
+                title="${states[i] === "next" ? "See what happens at this step" : states[i] === "now" ? "Current step" : "Review this step"}">
+          <span class="dot">${states[i] === "done" ? "✓" : states[i] === "dead" ? "✕" : i + 1}</span>
+          <span class="name">${esc(n.name)}</span>
+          <span class="role">${esc(n.role)}</span>
+        </button>`).join("")}
+    </div>
+    <div class="tracker-hint">Click any step to review it or preview what happens next.</div>`;
+
+  $tracker.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
+    const k = b.dataset.step;
+    peek = (k === currentKey() || k === peek) ? null : k;
+    render();
+  });
+
+  if (peek && peek !== currentKey()) {
+    const i = nodes.findIndex(n => n.key === peek);
+    $stage.innerHTML = states[i] === "next" ? viewPreview(nodes[i]) : viewRecap(nodes[i], states[i]);
+  } else {
+    peek = null;
+    $stage.innerHTML = viewStage();
+  }
+  bindStage();
+}
+
+/* ---------- Current-stage screens ---------- */
+function viewStage() {
+  switch (idea.status) {
+    case S.DRAFT: return viewSubmitForm();
+    case S.CONFIRM: return viewConfirm();
+    case S.ESL: return viewReview("esl");
+    case S.PL: return viewReview("pl");
+    case S.PLAN: return viewPlanForm();
+    case S.EXECUTION: return viewExecution();
+    case S.POST: return viewPostForm();
+    case S.COMPLETE: return viewComplete();
+    case S.FEEDBACK: return viewFeedback();
+    case S.CLOSED: return viewClosed();
+  }
+}
+
+/* ---- Stage 1: submission form ---- */
+function viewSubmitForm() {
+  const d = idea.draft;
+  const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
+  const benefitOpts = BENEFIT_CATEGORIES.map(b => `<option ${d.benefit === b ? "selected" : ""}>${esc(b)}</option>`).join("");
+  const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
+  const fsrChecks = FSR_CATEGORIES.map(f =>
+    `<label><input type="checkbox" name="fsr" value="${esc(f)}" ${d.fsr.includes(f) ? "checked" : ""}> ${esc(f)}</label>`).join("");
+
+  return `
+  <form class="card" id="submitForm" novalidate>
+    <div class="info-banner"><span class="i">i</span>Fields below are auto-populated from your profile. Edit if needed.</div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="f-project">Project Name <span class="req">*</span> <span class="hint">(auto-populated, editable)</span></label>
+        <input type="text" id="f-project" class="auto" value="${esc(d.project)}">
+        <div class="err">Project name is required.</div>
+      </div>
+      <div class="field">
+        <label for="f-submitter">Submitter Name <span class="hint">(auto-populated)</span></label>
+        <input type="text" id="f-submitter" class="auto" value="${esc(d.submitter)}">
+        <div class="err">Submitter name is required.</div>
+      </div>
+      <div class="field">
+        <label for="f-site">Site Location <span class="req">*</span></label>
+        <input type="text" id="f-site" placeholder="e.g. North Pylon Pier 3" value="${esc(d.siteLocation)}">
+        <div class="err">Please enter the site location.</div>
+      </div>
+      <div class="field">
+        <label for="f-date">Date <span class="hint">(auto-populated)</span></label>
+        <input type="text" id="f-date" class="auto" value="${fmtDate(d.date)}" readonly>
+      </div>
+      <div class="field">
+        <label for="f-phase">Applicable Phase <span class="req">*</span></label>
+        <select id="f-phase">
+          <option value="" ${d.phase ? "" : "selected"}>Select phase…</option>${phaseOpts}
+        </select>
+        <div class="err">Please select the applicable phase.</div>
+      </div>
+      <div class="field">
+        <label for="f-benefit">Benefit Category <span class="req">*</span></label>
+        <select id="f-benefit">
+          <option value="" ${d.benefit ? "" : "selected"}>Select category…</option>${benefitOpts}
+        </select>
+        <div class="err">Please choose a benefit category.</div>
+      </div>
+      <div class="field full">
+        <label for="f-title">Idea Title <span class="req">*</span></label>
+        <input type="text" id="f-title" maxlength="120" placeholder="Short, descriptive name for the idea" value="${esc(d.title)}">
+        <div class="err">Please give the idea a title.</div>
+      </div>
+      <div class="field full">
+        <label for="f-summary">Summary <span class="req">*</span></label>
+        <textarea id="f-summary" placeholder="What is the idea, what problem does it solve, and how would it work?">${esc(d.summary)}</textarea>
+        <div class="err">Please describe the idea.</div>
+      </div>
+      <div class="field full">
+        <label>FSR Category <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
+        <div class="checks" id="f-fsr">${fsrChecks}</div>
+        <div class="err">Select at least one FSR category.</div>
+      </div>
+      <div class="field full">
+        <label for="f-incident">Linked PC1 Incident <span class="hint">(optional — link the Event ID if this idea responds to a PC1 incident)</span></label>
+        <select id="f-incident">
+          <option value="" ${d.incident ? "" : "selected"}>No linked incident</option>${incidentOpts}
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-red-outline" id="saveDraftBtn">Save Draft</button>
+      <div class="right">
+        <button type="submit" class="btn btn-red">Submit Idea →</button>
+      </div>
+    </div>
+  </form>`;
+}
+
+/* ---- Submission confirmation ---- */
+function viewConfirm() {
+  const s = idea.submission;
+  return `
+  <div class="card hero">
+    <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h2>Idea submitted</h2>
+    <div class="iid">${idea.id}</div>
+    <p><strong>${esc(s.title)}</strong> has been logged and now moves to the ESL Lead for review.</p>
+    <ol class="flow">
+      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>Approves the idea, escalates it to the Project Leader, or marks it non-viable with feedback.</span></div></li>
+      <li><span class="n">2</span><div class="t"><b>Escalation decision (if escalated)</b><span>The Project Leader approves the initiative or marks it non-viable.</span></div></li>
+      <li><span class="n">3</span><div class="t"><b>Execution</b><span>Once approved, the Delivery Team creates an Action Plan, delivers it, and closes out with a Post-Implementation Form.</span></div></li>
+    </ol>
+    <div class="hero-actions">
+      <button class="btn btn-red" data-act="to-esl">Continue to ESL Review →</button>
+    </div>
+  </div>`;
+}
+
+/* ---- Stage 2: review (ESL Lead / Project Leader) ---- */
+function viewReview(who) {
+  const isEsl = who === "esl";
+  const s = idea.submission;
+  return `
+  <div class="card">
+    <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
+    <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${idea.escalated && !isEsl ? " · escalated by the ESL Lead" : ""}</p>
+    <div class="summary-block">${esc(s.summary)}</div>
+    <div class="kv">
+      <dt>Project</dt><dd>${esc(s.project)}</dd>
+      <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
+      <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
+      <dt>Benefit category</dt><dd>${esc(s.benefit)}</dd>
+      <dt>FSR categories</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+      <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
+    </div>
+  </div>
+  <div class="card">
+    <h2>${isEsl ? "ESL Lead Decision" : "Project Leader Decision"}</h2>
+    <p class="sub">${isEsl
+      ? "Review the idea and choose an outcome. Add comments below before deciding if needed."
+      : "This initiative was escalated by the ESL Lead. Approve it for execution or mark it non-viable."}</p>
+    <div class="decisions">
+      <div class="decision">
+        <button class="btn btn-teal" data-act="approve">Approve</button>
+        <p>Approve for execution — the Delivery Team creates an Action Plan next.</p>
+      </div>
+      ${isEsl ? `
+      <div class="decision">
+        <button class="btn btn-teal-outline" data-act="escalate">Escalate</button>
+        <p>Send to the Project Leader when the decision sits above ESL authority.</p>
+      </div>` : ""}
+      <div class="decision">
+        <button class="btn btn-red-outline" data-act="show-nv">Mark Non-Viable</button>
+        <p>Close the idea with written feedback for the Delivery Team.</p>
+      </div>
+      <div class="reveal" id="nvReveal" hidden>
+        <h3>Feedback for the Delivery Team <span class="req" style="color:var(--red)">*</span></h3>
+        <div class="field">
+          <textarea id="nvFeedback" placeholder="Explain why the idea is non-viable and what could make it viable."></textarea>
+          <div class="err">Feedback is required when marking an idea non-viable.</div>
+        </div>
+        <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:.8rem">
+          <button class="btn btn-ghost btn-sm" data-act="hide-nv">Cancel</button>
+          <button class="btn btn-red btn-sm" data-act="confirm-nv">Confirm Non-Viable</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  ${commentsCard()}`;
+}
+
+/* ---- Stage 3a: action plan ---- */
+function viewPlanForm() {
+  return `
+  ${originalCard("Approved for execution — build the Action Plan below.")}
+  <form class="card" id="planForm" novalidate>
+    <h2>Action Plan</h2>
+    <p class="sub">Inspection ID and action summary are prefilled from the approved initiative — set the delivery details.</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="ap-insp">Related Inspection ID <span class="hint">(prefilled)</span></label>
+        <input type="text" id="ap-insp" class="auto" value="${esc(inspectionIdFor())}" readonly>
+      </div>
+      <div class="field">
+        <label for="ap-due">Due Date <span class="req">*</span></label>
+        <input type="date" id="ap-due" min="${new Date().toISOString().slice(0, 10)}">
+        <div class="err">Please set a due date.</div>
+      </div>
+      <div class="field full">
+        <label for="ap-summary">Action Required Summary <span class="hint">(prefilled)</span></label>
+        <textarea id="ap-summary" class="auto" readonly>Implement approved initiative: ${esc(idea.submission.summary)}</textarea>
+      </div>
+      <div class="field">
+        <label for="ap-person">Person Responsible <span class="req">*</span></label>
+        <input type="text" id="ap-person" placeholder="Name of the owner">
+        <div class="err">Please name the person responsible.</div>
+      </div>
+      <div class="field">
+        <label for="ap-comments">Comments <span class="hint">(optional)</span></label>
+        <input type="text" id="ap-comments" placeholder="Delivery notes, phasing, dependencies…">
+      </div>
+    </div>
+    <div class="form-actions">
+      <span></span>
+      <div class="right"><button type="submit" class="btn btn-red">Create Action Plan →</button></div>
+    </div>
+  </form>
+  ${commentsCard()}`;
+}
+
+function viewExecution() {
+  const ap = idea.actionPlan;
+  return `
+  <div class="card">
+    <h2>Action Plan <span class="iid" style="margin-left:.4rem">${esc(ap.inspectionId)}</span></h2>
+    <p class="sub">Created ${fmtDate(ap.createdAt)} · the Delivery Team marks it complete when the work is done.</p>
+    <div class="kv">
+      <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>
+      <dt>Due date</dt><dd>${fmtDate(ap.dueDate)}</dd>
+      <dt>Person responsible</dt><dd>${esc(ap.personResponsible)}</dd>
+      <dt>Comments</dt><dd>${esc(ap.comments || "—")}</dd>
+    </div>
+    <div class="form-actions">
+      <span></span>
+      <div class="right"><button class="btn btn-red" data-act="mark-complete">Mark Complete →</button></div>
+    </div>
+    <p style="font-size:.78rem;color:var(--muted);margin-top:.5rem">Marking complete opens the Post-Implementation Form to close out the initiative.</p>
+  </div>
+  ${commentsCard()}`;
+}
+
+/* ---- Stage 3b: post-implementation ---- */
+function viewPostForm() {
+  const s = idea.submission;
+  return `
+  ${originalCard("Review the original submission, then record the outcome to close out this initiative.")}
+  <form class="card" id="pifForm" novalidate>
+    <h2>Post-Implementation Form</h2>
+    <p class="sub">Action Plan ${esc(idea.actionPlan.inspectionId)} marked complete ${fmtDate(idea.actionPlan.completedAt)}.</p>
+    <div class="form-grid">
+      <div class="field full">
+        <label for="pif-comments">Completion Comments <span class="req">*</span></label>
+        <textarea id="pif-comments" placeholder="What was delivered, what changed, lessons learned…"></textarea>
+        <div class="err">Please add completion comments.</div>
+      </div>
+      <div class="field">
+        <label for="pif-sme">SME <span class="req">*</span></label>
+        <input type="text" id="pif-sme" placeholder="Subject matter expert consulted">
+        <div class="err">Please name the SME.</div>
+      </div>
+      <div class="field">
+        <label for="pif-link">Case Study Link <span class="hint">(optional)</span></label>
+        <input type="url" id="pif-link" placeholder="https://…">
+      </div>
+      <div class="field full">
+        <label for="pif-value">Value <span class="req">*</span></label>
+        <input type="text" id="pif-value" placeholder="Quantified or qualitative value delivered (e.g. incidents prevented, cost avoided)">
+        <div class="err">Please describe the value delivered.</div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <span></span>
+      <div class="right"><button type="submit" class="btn btn-red">Submit &amp; Complete →</button></div>
+    </div>
+  </form>`;
+}
+
+/* ---- Terminal screens ---- */
+function viewComplete() {
+  const p = idea.postImpl;
+  return `
+  <div class="card hero">
+    <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h2>Initiative complete</h2>
+    <div class="iid">${idea.id}</div>
+    <p><strong>${esc(idea.submission.title)}</strong> has been delivered and closed out. The post-implementation review is on record.</p>
+  </div>
+  <div class="card">
+    <h2>Post-Implementation Review</h2>
+    <p class="sub">Submitted ${fmtDate(p.submittedAt)}</p>
+    <div class="kv">
+      <dt>Completion comments</dt><dd>${esc(p.completionComments)}</dd>
+      <dt>SME</dt><dd>${esc(p.sme)}</dd>
+      <dt>Case study</dt><dd>${p.caseStudyLink ? `<a href="${esc(p.caseStudyLink)}" target="_blank" rel="noopener">${esc(p.caseStudyLink)}</a>` : "—"}</dd>
+      <dt>Value</dt><dd>${esc(p.value)}</dd>
+    </div>
+    <div class="hero-actions" style="justify-content:flex-end">
+      <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
+    </div>
+  </div>
+  ${commentsCard(true)}`;
+}
+
+function viewFeedback() {
+  const decider = idea.decisions.pl ? "Project Leader" : "ESL Lead";
+  const fb = (idea.decisions.pl || idea.decisions.esl).feedback;
+  return `
+  <div class="card">
+    <h2><span class="iid">${idea.id}</span> · ${esc(idea.submission.title)}</h2>
+    <p class="sub">This idea was marked non-viable by the ${decider}. The feedback below is for your team.</p>
+    <div class="callout red"><strong>Feedback:</strong> ${esc(fb)}</div>
+    <div class="form-actions">
+      <span style="font-size:.78rem;color:var(--muted)">Acknowledging confirms the Delivery Team has received this feedback and closes the initiative.</span>
+      <div class="right"><button class="btn btn-red" data-act="ack-feedback">Acknowledge Feedback →</button></div>
+    </div>
+  </div>
+  ${commentsCard()}`;
+}
+
+function viewClosed() {
+  return `
+  <div class="card hero">
+    <div class="mark bad"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></div>
+    <h2>Initiative closed — non-viable</h2>
+    <div class="iid">${idea.id}</div>
+    <p>The Delivery Team has received the reviewer's feedback on <strong>${esc(idea.submission.title)}</strong>. Rework the idea and submit it again any time.</p>
+    <div class="hero-actions">
+      <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
+    </div>
+  </div>
+  ${commentsCard(true)}`;
+}
+
+/* ---- Shared partials ---- */
+function originalCard(note) {
+  const s = idea.submission;
+  return `
+  <div class="card">
+    <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
+    <p class="sub">${esc(note)}</p>
+    <div class="summary-block" style="margin-bottom:0">${esc(s.summary)}</div>
+  </div>`;
+}
+
+function commentsCard(readOnly) {
+  const logHtml = idea.log.length
+    ? `<ul class="clog">${idea.log.map(l => `
+        <li class="${l.type === "sys" ? "sys" : ""}">
+          <div class="who">${esc(l.who)} <span class="r">· ${esc(l.role)} · ${fmtDateTime(l.at)}</span></div>
+          <div class="txt">${esc(l.text)}</div>
+        </li>`).join("")}</ul>`
+    : `<p class="sub" style="margin:0">No activity yet.</p>`;
+  return `
+  <div class="card">
+    <h2>Comments &amp; activity</h2>
+    <p class="sub">Full history of comments and workflow decisions.</p>
+    ${logHtml}
+    ${readOnly ? "" : `
+    <div class="comment-box">
+      <textarea id="newComment" placeholder="Add a comment as ${ROLE_FOR_STATUS[idea.status]}…"></textarea>
+      <button class="btn btn-ghost" data-act="add-comment" type="button">Add</button>
+    </div>`}
+  </div>`;
+}
+
+function pc1Label(id) {
+  const e = PC1_INCIDENTS.find(x => x.id === id);
+  return e ? e.label : id;
+}
+function inspectionIdFor() {
+  if (!idea.inspectionId) {
+    const n = parseInt((idea.id || "0").slice(-3), 10) || 1;
+    idea.inspectionId = "INSP-2026-" + (100 + (n * 7) % 900);
+  }
+  return idea.inspectionId;
+}
+
+/* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
+const STEP_INFO = {
+  submit:   { desc: "The Delivery Team submits the idea on a single form — project context, the idea itself, benefit category, FSR categories, and any linked PC1 incident.",
+              outcomes: ["Idea is logged with an Initiative ID and moves to ESL Review."] },
+  esl:      { desc: "The ESL Lead reviews the submission, can add comments, and decides the outcome.",
+              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Escalate — the Project Leader makes the decision.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
+  pl:       { desc: "The Project Leader decides on the escalated initiative.",
+              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
+  plan:     { desc: "The Delivery Team creates the Action Plan. The Inspection ID and action summary are prefilled; due date, person responsible, and comments are set by the team.",
+              outcomes: ["Action Plan is delivered, then marked complete to open the Post-Implementation Form."] },
+  postimpl: { desc: "The Delivery Team reviews the original submission and closes out with completion comments, SME, case study link, and the value delivered.",
+              outcomes: ["Initiative is complete and on record."] },
+  done:     { desc: "The initiative is delivered, reviewed, and closed out.", outcomes: [] },
+  feedback: { desc: "The Delivery Team receives the reviewer's feedback on the non-viable idea and acknowledges it to close the initiative.",
+              outcomes: ["Initiative closes — the idea can be reworked and resubmitted."] },
+};
+
+function viewPreview(node) {
+  const info = STEP_INFO[node.key];
+  return `
+  <div class="card">
+    <div class="peek-head">
+      <span class="t next">Up next</span>
+      <button class="btn btn-ghost btn-sm" data-act="back">← Back to current step</button>
+    </div>
+    <h2>${esc(node.name)} <span class="sub" style="display:inline;font-weight:500">· ${esc(node.role)}</span></h2>
+    <p class="sub" style="margin-top:.4rem">${esc(info.desc)}</p>
+    ${info.outcomes.length ? `<ul class="outcomes">${info.outcomes.map(o => `<li><span class="b"></span>${esc(o)}</li>`).join("")}</ul>` : ""}
+  </div>`;
+}
+
+function viewRecap(node, state) {
+  let body = "";
+  const s = idea.submission;
+  if (node.key === "submit" && s) {
+    body = `
+      <div class="summary-block">${esc(s.summary)}</div>
+      <div class="kv">
+        <dt>Idea title</dt><dd>${esc(s.title)}</dd>
+        <dt>Project</dt><dd>${esc(s.project)}</dd>
+        <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
+        <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
+        <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
+        <dt>Benefit category</dt><dd>${esc(s.benefit)}</dd>
+        <dt>FSR categories</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+        <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
+      </div>`;
+  } else if (node.key === "esl" || node.key === "pl") {
+    const d = idea.decisions[node.key];
+    const outcomeText = { approved: "Approved for execution.", escalated: "Escalated to the Project Leader.", "non-viable": "Marked non-viable." }[d.outcome];
+    body = `
+      <div class="callout ${d.outcome === "non-viable" ? "red" : "teal"}"><strong>Decision:</strong> ${outcomeText}${d.feedback ? `<br><strong>Feedback:</strong> ${esc(d.feedback)}` : ""}</div>
+      <p class="sub" style="margin:.7rem 0 0">Decided ${fmtDateTime(d.at)}. Comments from this stage are in the activity log below.</p>`;
+  } else if (node.key === "plan" && idea.actionPlan) {
+    const ap = idea.actionPlan;
+    body = `
+      <div class="kv">
+        <dt>Related Inspection ID</dt><dd>${esc(ap.inspectionId)}</dd>
+        <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>
+        <dt>Due date</dt><dd>${fmtDate(ap.dueDate)}</dd>
+        <dt>Person responsible</dt><dd>${esc(ap.personResponsible)}</dd>
+        <dt>Comments</dt><dd>${esc(ap.comments || "—")}</dd>
+        <dt>Completed</dt><dd>${ap.completedAt ? fmtDate(ap.completedAt) : "In progress"}</dd>
+      </div>`;
+  } else if (node.key === "postimpl" && idea.postImpl) {
+    const p = idea.postImpl;
+    body = `
+      <div class="kv">
+        <dt>Completion comments</dt><dd>${esc(p.completionComments)}</dd>
+        <dt>SME</dt><dd>${esc(p.sme)}</dd>
+        <dt>Case study</dt><dd>${p.caseStudyLink ? `<a href="${esc(p.caseStudyLink)}" target="_blank" rel="noopener">${esc(p.caseStudyLink)}</a>` : "—"}</dd>
+        <dt>Value</dt><dd>${esc(p.value)}</dd>
+      </div>`;
+  } else {
+    body = `<p class="sub" style="margin:0">${esc(STEP_INFO[node.key].desc)}</p>`;
+  }
+  return `
+  <div class="card">
+    <div class="peek-head">
+      <span class="t ${state === "dead" ? "dead" : "done"}">${state === "dead" ? "Decision made here" : "Completed step"}</span>
+      <button class="btn btn-ghost btn-sm" data-act="back">← Back to current step</button>
+    </div>
+    <h2>${esc(node.name)} <span class="sub" style="display:inline;font-weight:500">· ${esc(node.role)}</span></h2>
+    <div style="margin-top:.8rem">${body}</div>
+  </div>
+  ${commentsCard(true)}`;
+}
+
+/* =============================================================
+   Events & transitions
+============================================================= */
+function markInvalid(input, bad) {
+  const f = input.closest(".field");
+  if (f) f.classList.toggle("invalid", bad);
+  return bad;
+}
+
+function readDraftFromForm() {
+  const g = id => document.getElementById(id);
+  if (!g("f-title")) return;
+  idea.draft = {
+    project: g("f-project").value, submitter: g("f-submitter").value,
+    date: idea.draft.date,
+    siteLocation: g("f-site").value, phase: g("f-phase").value,
+    title: g("f-title").value, summary: g("f-summary").value,
+    benefit: g("f-benefit").value,
+    fsr: [...document.querySelectorAll('#f-fsr input:checked')].map(c => c.value),
+    incident: g("f-incident").value,
+  };
+}
+
+let saveTimer = null;
+function autoSaveDraft() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    readDraftFromForm();
+    save();
+    $saved.classList.add("show");
+  }, 400);
+}
+
+function bindStage() {
+  const form = document.getElementById("submitForm");
+  if (form) {
+    form.onsubmit = handleSubmitIdea;
+    form.addEventListener("input", autoSaveDraft);
+    form.addEventListener("change", autoSaveDraft);
+    document.getElementById("saveDraftBtn").onclick = () => {
+      readDraftFromForm(); save();
+      $saved.classList.add("show");
+      toast("Draft saved.");
+    };
+  }
+  const planForm = document.getElementById("planForm");
+  if (planForm) planForm.onsubmit = handleCreatePlan;
+  const pifForm = document.getElementById("pifForm");
+  if (pifForm) pifForm.onsubmit = handleSubmitPif;
+
+  $stage.querySelectorAll("[data-act]").forEach(el => {
+    el.onclick = (e) => { e.preventDefault(); handleAction(el.dataset.act); };
+  });
+}
+
+function handleSubmitIdea(e) {
+  e.preventDefault();
+  readDraftFromForm();
+  const g = id => document.getElementById(id);
+  const d = idea.draft;
+  let bad = false;
+  bad = markInvalid(g("f-project"), !d.project.trim()) || bad;
+  bad = markInvalid(g("f-submitter"), !d.submitter.trim()) || bad;
+  bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
+  bad = markInvalid(g("f-phase"), !d.phase) || bad;
+  bad = markInvalid(g("f-benefit"), !d.benefit) || bad;
+  bad = markInvalid(g("f-title"), !d.title.trim()) || bad;
+  bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
+  document.getElementById("f-fsr").closest(".field").classList.toggle("invalid", d.fsr.length === 0);
+  bad = bad || d.fsr.length === 0;
+  if (bad) { toast("Please complete the required fields."); return; }
+
+  idea.id = nextInitiativeId();
+  idea.submission = Object.assign({}, d, {
+    project: d.project.trim(), submitter: d.submitter.trim(),
+    siteLocation: d.siteLocation.trim(), title: d.title.trim(), summary: d.summary.trim(),
+    submittedAt: nowISO(),
+  });
+  idea.status = S.CONFIRM;
+  addLog("sys", "Idea submitted.", idea.submission.submitter, "Delivery Team");
+  save(); render();
+}
+
+function handleCreatePlan(e) {
+  e.preventDefault();
+  const due = document.getElementById("ap-due");
+  const person = document.getElementById("ap-person");
+  let bad = false;
+  bad = markInvalid(due, !due.value) || bad;
+  bad = markInvalid(person, !person.value.trim()) || bad;
+  if (bad) { toast("Please complete the required fields."); return; }
+  idea.actionPlan = {
+    inspectionId: inspectionIdFor(),
+    actionSummary: document.getElementById("ap-summary").value,
+    dueDate: due.value,
+    personResponsible: person.value.trim(),
+    comments: document.getElementById("ap-comments").value.trim(),
+    createdAt: nowISO(),
+  };
+  idea.status = S.EXECUTION;
+  addLog("sys", `Action Plan created (${idea.actionPlan.inspectionId}).`);
+  save(); render(); toast("Action Plan created.");
+}
+
+function handleSubmitPif(e) {
+  e.preventDefault();
+  const comments = document.getElementById("pif-comments");
+  const sme = document.getElementById("pif-sme");
+  const value = document.getElementById("pif-value");
+  let bad = false;
+  bad = markInvalid(comments, !comments.value.trim()) || bad;
+  bad = markInvalid(sme, !sme.value.trim()) || bad;
+  bad = markInvalid(value, !value.value.trim()) || bad;
+  if (bad) { toast("Please complete the required fields."); return; }
+  idea.postImpl = {
+    completionComments: comments.value.trim(),
+    sme: sme.value.trim(),
+    caseStudyLink: document.getElementById("pif-link").value.trim(),
+    value: value.value.trim(),
+    submittedAt: nowISO(),
+  };
+  idea.status = S.COMPLETE;
+  addLog("sys", "Post-Implementation Form submitted. Initiative complete.");
+  save(); render(); toast("Initiative complete. 🎉");
+}
+
+function handleAction(act) {
+  const stageKey = idea.status === S.ESL ? "esl" : "pl";
+  switch (act) {
+    case "back": peek = null; render(); break;
+    case "to-esl":
+      idea.status = S.ESL;
+      save(); render();
+      break;
+    case "add-comment": {
+      const ta = document.getElementById("newComment");
+      const text = ta.value.trim();
+      if (!text) { toast("Write a comment first."); return; }
+      addLog("comment", text);
+      save(); render(); toast("Comment added.");
+      break;
+    }
+    case "approve":
+      idea.decisions[stageKey] = { outcome: "approved", at: nowISO() };
+      addLog("sys", "Approved. Delivery Team to create Action Plan.");
+      idea.status = S.PLAN;
+      save(); render(); toast("Approved — over to the Delivery Team.");
+      break;
+    case "escalate":
+      idea.decisions.esl = { outcome: "escalated", at: nowISO() };
+      idea.escalated = true;
+      addLog("sys", "Escalated to Project Leader.");
+      idea.status = S.PL;
+      save(); render(); toast("Escalated to the Project Leader.");
+      break;
+    case "show-nv": {
+      const r = document.getElementById("nvReveal");
+      r.hidden = false;
+      document.getElementById("nvFeedback").focus();
+      break;
+    }
+    case "hide-nv":
+      document.getElementById("nvReveal").hidden = true;
+      break;
+    case "confirm-nv": {
+      const fb = document.getElementById("nvFeedback");
+      if (!fb.value.trim()) { markInvalid(fb, true); toast("Feedback is required."); return; }
+      idea.decisions[stageKey] = { outcome: "non-viable", feedback: fb.value.trim(), at: nowISO() };
+      addLog("sys", "Marked Non-Viable. Feedback provided for Delivery Team.");
+      idea.status = S.FEEDBACK;
+      save(); render(); toast("Marked non-viable — feedback sent to the Delivery Team.");
+      break;
+    }
+    case "mark-complete":
+      idea.actionPlan.completedAt = nowISO();
+      idea.status = S.POST;
+      addLog("sys", "Action Plan marked complete. Post-Implementation Form opened.");
+      save(); render(); toast("Marked complete — finish the Post-Implementation Form.");
+      break;
+    case "ack-feedback":
+      idea.status = S.CLOSED;
+      addLog("sys", "Feedback received by Delivery Team. Initiative closed.");
+      save(); render(); toast("Feedback acknowledged.");
+      break;
+    case "restart":
+      idea = freshIdea();
+      peek = null;
+      save(); render();
+      toast("New idea started.");
+      break;
+  }
+}
+
+/* Clear field-level validation as soon as the user fixes the field */
+["input", "change"].forEach(ev => document.addEventListener(ev, e => {
+  const f = e.target.closest && e.target.closest(".field");
+  if (f) f.classList.remove("invalid");
+}));
+
+document.getElementById("resetBtn").onclick = () => {
+  idea = freshIdea();
+  peek = null;
+  save(); render();
+  toast("Workflow reset.");
+};
+
+/* =============================================================
+   Boot
+============================================================= */
+idea = load() || freshIdea();
+render();
+</script>
+</body>
+</html>
