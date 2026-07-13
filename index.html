@@ -91,6 +91,7 @@
 
   /* ---------- Forms ---------- */
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.05rem 1.5rem}
+  .form-grid > *{min-width:0}
   .form-grid .full{grid-column:1/-1}
   @media(max-width:680px){.form-grid{grid-template-columns:1fr}}
   .field label{display:block;font-size:.78rem;font-weight:700;color:var(--label);margin-bottom:.35rem}
@@ -113,7 +114,7 @@
   .msel{position:relative}
   .msel-toggle{display:flex;align-items:center;justify-content:space-between;gap:.5rem;width:100%;border:1px solid var(--input-line);border-radius:6px;padding:.6rem .7rem;background:#fff;text-align:left;color:var(--ink);font-size:.92rem;transition:border-color .15s,box-shadow .15s}
   .msel-toggle:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
-  .msel-summary{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .msel-summary{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .msel-summary.ph{color:var(--muted)}
   .msel-caret{flex:none;color:var(--muted);font-size:.65rem;transition:transform .15s}
   .msel.open .msel-caret{transform:rotate(180deg)}
@@ -245,6 +246,12 @@ const PROFILE = { name: "Jake Anderson", project: "Fremantle Bridges Alliance" }
 
 const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Handover"];
 
+const DISCIPLINES = [
+  "Civil", "Structural", "Geotechnical", "Mechanical", "Electrical",
+  "Marine", "Environmental", "Rail Systems", "Traffic & Transport",
+  "Design", "Project Controls", "Health & Safety", "Quality",
+];
+
 const BENEFIT_CATEGORIES = [
   "Fatality & Serious Injury Prevention",
   "Occupational Health & Wellbeing",
@@ -317,7 +324,7 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "", phase: "", title: "", summary: "",
+      siteLocation: "", phase: "", discipline: "", title: "", summary: "",
       benefit: [], fsr: [], incident: "",
     },
     submission: null,      // frozen copy on submit
@@ -506,7 +513,7 @@ function multiSelect(id, options, selected, placeholder) {
       <span class="msel-caret">▾</span>
     </button>
     <div class="msel-panel" hidden>
-      ${options.map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}
+      ${[...options].sort((a, b) => a.localeCompare(b)).map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}
     </div>
   </div>`;
 }
@@ -516,6 +523,7 @@ function viewSubmitForm() {
   const d = idea.draft;
   const revising = !!idea.returnStage;
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
+  const disciplineOpts = DISCIPLINES.map(p => `<option ${d.discipline === p ? "selected" : ""}>${esc(p)}</option>`).join("");
   const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
 
   const returnFb = revising ? (idea.decisions[idea.returnStage] || {}).feedback : "";
@@ -552,6 +560,13 @@ function viewSubmitForm() {
           <option value="" ${d.phase ? "" : "selected"}>Select phase…</option>${phaseOpts}
         </select>
         <div class="err">Please select the applicable phase.</div>
+      </div>
+      <div class="field">
+        <label for="f-discipline">Discipline <span class="req">*</span></label>
+        <select id="f-discipline">
+          <option value="" ${d.discipline ? "" : "selected"}>Select discipline…</option>${disciplineOpts}
+        </select>
+        <div class="err">Please select the discipline.</div>
       </div>
       <div class="field" id="field-benefit">
         <label>Benefit Category <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
@@ -633,6 +648,7 @@ function viewReview(who) {
       <dt>Date</dt><dd>${fmtDate(s.date)}</dd>
       <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
       <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
+      <dt>Discipline</dt><dd>${esc(s.discipline) || "—"}</dd>
       <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
       <dt>Related FSR</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
       <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
@@ -903,6 +919,7 @@ function viewRecap(node, state) {
         <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
         <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
+        <dt>Discipline</dt><dd>${esc(s.discipline) || "—"}</dd>
         <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
         <dt>Related FSR</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
@@ -964,6 +981,7 @@ function readDraftFromForm() {
     project: g("f-project").value, submitter: g("f-submitter").value,
     date: idea.draft.date,
     siteLocation: g("f-site").value, phase: g("f-phase").value,
+    discipline: g("f-discipline").value,
     title: g("f-title").value, summary: g("f-summary").value,
     benefit: [...document.querySelectorAll('[data-msel="f-benefit"] input:checked')].map(c => c.value),
     fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
@@ -1060,6 +1078,7 @@ function handleSubmitIdea(e) {
   bad = markInvalid(g("f-submitter"), !d.submitter.trim()) || bad;
   bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
   bad = markInvalid(g("f-phase"), !d.phase) || bad;
+  bad = markInvalid(g("f-discipline"), !d.discipline) || bad;
   bad = markInvalid(g("f-title"), !d.title.trim()) || bad;
   bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
   document.getElementById("field-benefit").classList.toggle("invalid", d.benefit.length === 0);
@@ -1127,7 +1146,8 @@ function draftFromSubmission() {
   const s = idea.submission;
   return {
     project: s.project, submitter: s.submitter, date: s.date,
-    siteLocation: s.siteLocation, phase: s.phase, title: s.title, summary: s.summary,
+    siteLocation: s.siteLocation, phase: s.phase, discipline: s.discipline,
+    title: s.title, summary: s.summary,
     benefit: [...(s.benefit || [])], fsr: [...(s.fsr || [])], incident: s.incident,
   };
 }
