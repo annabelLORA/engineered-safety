@@ -108,6 +108,23 @@
   .checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.4rem .8rem;border:1px solid var(--input-line);border-radius:6px;padding:.7rem .8rem}
   .checks label{display:flex;align-items:center;gap:.5rem;font-size:.86rem;font-weight:500;margin:0;cursor:pointer;color:var(--ink)}
   .checks input{accent-color:var(--teal);width:15px;height:15px}
+
+  /* ---------- Multiselect dropdown ---------- */
+  .msel{position:relative}
+  .msel-toggle{display:flex;align-items:center;justify-content:space-between;gap:.5rem;width:100%;border:1px solid var(--input-line);border-radius:6px;padding:.6rem .7rem;background:#fff;text-align:left;color:var(--ink);font-size:.92rem;transition:border-color .15s,box-shadow .15s}
+  .msel-toggle:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+  .msel-summary{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .msel-summary.ph{color:var(--muted)}
+  .msel-caret{flex:none;color:var(--muted);font-size:.65rem;transition:transform .15s}
+  .msel.open .msel-caret{transform:rotate(180deg)}
+  .msel.open .msel-toggle{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+  .msel-panel{position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--input-line);border-radius:6px;box-shadow:var(--shadow);padding:.35rem;max-height:250px;overflow-y:auto;gap:.1rem}
+  .msel-panel[hidden]{display:none}
+  .msel-panel:not([hidden]){display:grid}
+  .msel-panel label{display:flex;align-items:center;gap:.55rem;font-size:.86rem;font-weight:500;margin:0;padding:.4rem .5rem;border-radius:5px;cursor:pointer;color:var(--ink)}
+  .msel-panel label:hover{background:var(--soft)}
+  .msel-panel input{accent-color:var(--teal);width:15px;height:15px}
+  .field.invalid .msel-toggle{border-color:var(--red)}
   .form-actions{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--line);flex-wrap:wrap}
   .form-actions .right{display:flex;gap:.75rem;margin-left:auto}
 
@@ -142,6 +159,11 @@
   .decision p{font-size:.8rem;color:var(--muted)}
   .reveal{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:1rem}
   .reveal h3{font-size:.88rem;margin-bottom:.6rem}
+  .decision-form{display:flex;flex-direction:column;gap:1.05rem;margin-top:.4rem}
+  .decision-form .fb-req{color:var(--red);display:none}
+  .decision-form.need-fb .fb-req{display:inline}
+  .decision-form .fb-optional{color:var(--muted);font-weight:500}
+  .decision-form.need-fb .fb-optional{display:none}
 
   /* ---------- Comments ---------- */
   .clog{list-style:none;display:flex;flex-direction:column;gap:.7rem;max-height:300px;overflow-y:auto}
@@ -233,9 +255,12 @@ const BENEFIT_CATEGORIES = [
 ];
 
 const FSR_CATEGORIES = [
-  "Working at Height", "Lifting Operations", "Mobile Plant & Driving",
-  "Energy Isolation", "Confined Spaces", "Excavations & Ground Works",
-  "Line of Fire", "Dropped Objects", "Temporary Works",
+  "Plant & Equipment", "Cranes & Lifting", "Excavation", "Piling",
+  "Work in Rail Environments", "Heavy Vehicles", "Traffic Management",
+  "Hazardous Energy", "Electrical Safety", "Hazardous Dust & Fibres",
+  "Confined Spaces", "Falls & Dropped Objects", "Scaffolding",
+  "Formwork & Falsework", "Work in, over & Adjacent to Water",
+  "Precast Concrete", "Demolition",
 ];
 
 const PC1_INCIDENTS = [
@@ -288,11 +313,12 @@ function freshIdea() {
     status: S.DRAFT,
     id: null,
     escalated: false,
+    returnStage: null,     // "esl" | "pl" while a returned idea is being revised & resubmitted
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
       siteLocation: "", phase: "", title: "", summary: "",
-      benefit: "", fsr: [], incident: "",
+      benefit: [], fsr: [], incident: "",
     },
     submission: null,      // frozen copy on submit
     decisions: {},         // esl: {outcome, feedback?, at}, pl: {...}
@@ -331,10 +357,16 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function addLog(type, text, who, role) {
-  idea.log.push({ at: nowISO(), who: who || actorName(), role: role || ROLE_FOR_STATUS[idea.status], type, text });
+  idea.log.push({ at: nowISO(), who: who || actorName(), role: role || currentRole(), type, text });
+}
+/* Role currently acting — while an ESL-returned idea is revised by the ESL Lead
+   (returnStage === "pl"), the submit/confirm screens are driven by the ESL Lead. */
+function currentRole() {
+  if ((idea.status === S.DRAFT || idea.status === S.CONFIRM) && idea.returnStage === "pl") return "ESL Lead";
+  return ROLE_FOR_STATUS[idea.status];
 }
 function actorName() {
-  const r = ROLE_FOR_STATUS[idea.status];
+  const r = currentRole();
   return r === "Delivery Team" ? (idea.submission ? idea.submission.submitter : PROFILE.name) : r;
 }
 function toast(msg) {
@@ -369,7 +401,7 @@ function buildPath() {
 
 function currentKey() {
   switch (idea.status) {
-    case S.DRAFT: case S.CONFIRM: return "submit";
+    case S.DRAFT: case S.CONFIRM: return idea.returnStage === "pl" ? "esl" : "submit";
     case S.ESL: return "esl";
     case S.PL: return "pl";
     case S.PLAN: case S.EXECUTION: return "plan";
@@ -409,8 +441,8 @@ function render() {
   const doneCount = states.filter(s => s === "done" || s === "dead").length;
   const pct = terminal ? 100 : Math.round((doneCount / nodes.length) * 100);
 
-  $title.textContent = TITLE_FOR_STATUS[idea.status];
-  $roleChip.textContent = "Acting as: " + ROLE_FOR_STATUS[idea.status];
+  $title.textContent = (idea.returnStage && idea.status === S.DRAFT) ? "Revise & Resubmit Idea" : TITLE_FOR_STATUS[idea.status];
+  $roleChip.textContent = "Acting as: " + currentRole();
   $saved.classList.toggle("show", false);
 
   $tracker.innerHTML = `
@@ -462,18 +494,38 @@ function viewStage() {
   }
 }
 
+/* Custom multiselect dropdown — a toggle showing the current selection that
+   opens a checkbox panel. `id` is used as the data-msel handle. */
+function multiSelect(id, options, selected, placeholder) {
+  const count = selected.length;
+  const summary = count ? selected.join(", ") : placeholder;
+  return `
+  <div class="msel" data-msel="${id}">
+    <button type="button" class="msel-toggle" aria-haspopup="listbox" aria-expanded="false">
+      <span class="msel-summary ${count ? "" : "ph"}">${esc(summary)}</span>
+      <span class="msel-caret">▾</span>
+    </button>
+    <div class="msel-panel" hidden>
+      ${options.map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}
+    </div>
+  </div>`;
+}
+
 /* ---- Stage 1: submission form ---- */
 function viewSubmitForm() {
   const d = idea.draft;
+  const revising = !!idea.returnStage;
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
-  const benefitOpts = BENEFIT_CATEGORIES.map(b => `<option ${d.benefit === b ? "selected" : ""}>${esc(b)}</option>`).join("");
   const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
-  const fsrChecks = FSR_CATEGORIES.map(f =>
-    `<label><input type="checkbox" name="fsr" value="${esc(f)}" ${d.fsr.includes(f) ? "checked" : ""}> ${esc(f)}</label>`).join("");
+
+  const returnFb = revising ? (idea.decisions[idea.returnStage] || {}).feedback : "";
+  const returnBanner = revising ? `
+    <div class="callout amber" style="margin-bottom:1.2rem"><strong>Returned for detail by the ${idea.returnStage === "pl" ? "Project Leader" : "ESL Lead"}:</strong> ${esc(returnFb || "Please add more detail before resubmitting.")}</div>`
+    : `<div class="info-banner"><span class="i">i</span>Fields below are auto-populated from your profile. Edit if needed.</div>`;
 
   return `
   <form class="card" id="submitForm" novalidate>
-    <div class="info-banner"><span class="i">i</span>Fields below are auto-populated from your profile. Edit if needed.</div>
+    ${returnBanner}
     <div class="form-grid">
       <div class="field">
         <label for="f-project">Project Name <span class="req">*</span> <span class="hint">(auto-populated, editable)</span></label>
@@ -501,12 +553,10 @@ function viewSubmitForm() {
         </select>
         <div class="err">Please select the applicable phase.</div>
       </div>
-      <div class="field">
-        <label for="f-benefit">Benefit Category <span class="req">*</span></label>
-        <select id="f-benefit">
-          <option value="" ${d.benefit ? "" : "selected"}>Select category…</option>${benefitOpts}
-        </select>
-        <div class="err">Please choose a benefit category.</div>
+      <div class="field" id="field-benefit">
+        <label>Benefit Category <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
+        ${multiSelect("f-benefit", BENEFIT_CATEGORIES, d.benefit, "Select categories…")}
+        <div class="err">Please choose at least one benefit category.</div>
       </div>
       <div class="field full">
         <label for="f-title">Idea Title <span class="req">*</span></label>
@@ -518,10 +568,10 @@ function viewSubmitForm() {
         <textarea id="f-summary" placeholder="What is the idea, what problem does it solve, and how would it work?">${esc(d.summary)}</textarea>
         <div class="err">Please describe the idea.</div>
       </div>
-      <div class="field full">
-        <label>FSR Category <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
-        <div class="checks" id="f-fsr">${fsrChecks}</div>
-        <div class="err">Select at least one FSR category.</div>
+      <div class="field full" id="field-fsr">
+        <label>Related FSR <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
+        ${multiSelect("f-fsr", FSR_CATEGORIES, d.fsr, "Select related FSR…")}
+        <div class="err">Select at least one related FSR.</div>
       </div>
       <div class="field full">
         <label for="f-incident">Linked PC1 Incident <span class="hint">(optional — link the Event ID if this idea responds to a PC1 incident)</span></label>
@@ -533,7 +583,7 @@ function viewSubmitForm() {
     <div class="form-actions">
       <button type="button" class="btn btn-red-outline" id="saveDraftBtn">Save Draft</button>
       <div class="right">
-        <button type="submit" class="btn btn-red">Submit Idea →</button>
+        <button type="submit" class="btn btn-red">${revising ? "Resubmit Idea →" : "Submit Idea →"}</button>
       </div>
     </div>
   </form>`;
@@ -542,19 +592,23 @@ function viewSubmitForm() {
 /* ---- Submission confirmation ---- */
 function viewConfirm() {
   const s = idea.submission;
+  const toPl = idea.returnStage === "pl";
+  const resubmit = !!idea.returnStage;
+  const nextRole = toPl ? "Project Leader" : "ESL Lead";
+  const nextLabel = toPl ? "Continue to Project Leader Decision →" : "Continue to ESL Review →";
   return `
   <div class="card hero">
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h2>Idea submitted</h2>
+    <h2>${resubmit ? "Idea resubmitted" : "Idea submitted"}</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(s.title)}</strong> has been logged and now moves to the ESL Lead for review.</p>
+    <p><strong>${esc(s.title)}</strong> has been ${resubmit ? "revised and now returns" : "logged and now moves"} to the ${nextRole} for review.</p>
     <ol class="flow">
-      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>Approves the idea, escalates it to the Project Leader, or marks it non-viable with feedback.</span></div></li>
-      <li><span class="n">2</span><div class="t"><b>Escalation decision (if escalated)</b><span>The Project Leader approves the initiative or marks it non-viable.</span></div></li>
+      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>Approves the idea, escalates it to the Project Leader, returns it for more detail, or marks it non-viable with feedback.</span></div></li>
+      <li><span class="n">2</span><div class="t"><b>Escalation decision (if escalated)</b><span>The Project Leader approves the initiative, returns it for detail, or marks it non-viable.</span></div></li>
       <li><span class="n">3</span><div class="t"><b>Execution</b><span>Once approved, the Delivery Team creates an Action Plan, delivers it, and closes out with a Post-Implementation Form.</span></div></li>
     </ol>
     <div class="hero-actions">
-      <button class="btn btn-red" data-act="to-esl">Continue to ESL Review →</button>
+      <button class="btn btn-red" data-act="continue-review">${nextLabel}</button>
     </div>
   </div>`;
 }
@@ -563,51 +617,50 @@ function viewConfirm() {
 function viewReview(who) {
   const isEsl = who === "esl";
   const s = idea.submission;
+  const options = isEsl
+    ? [["approve", "Approve"], ["escalate", "Escalate"], ["non-viable", "Mark Non-Viable"], ["return", "Return for Detail"]]
+    : [["approve", "Approve"], ["non-viable", "Mark Non-Viable"], ["return", "Return for Detail"]];
+  const optHtml = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   return `
   <div class="card">
     <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
     <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${idea.escalated && !isEsl ? " · escalated by the ESL Lead" : ""}</p>
     <div class="summary-block">${esc(s.summary)}</div>
     <div class="kv">
+      <dt>Idea title</dt><dd>${esc(s.title)}</dd>
       <dt>Project</dt><dd>${esc(s.project)}</dd>
+      <dt>Submitted by</dt><dd>${esc(s.submitter)}</dd>
+      <dt>Date</dt><dd>${fmtDate(s.date)}</dd>
       <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
       <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-      <dt>Benefit category</dt><dd>${esc(s.benefit)}</dd>
-      <dt>FSR categories</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+      <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
+      <dt>Related FSR</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
       <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
     </div>
   </div>
   <div class="card">
     <h2>${isEsl ? "ESL Lead Decision" : "Project Leader Decision"}</h2>
     <p class="sub">${isEsl
-      ? "Review the idea and choose an outcome. Add comments below before deciding if needed."
-      : "This initiative was escalated by the ESL Lead. Approve it for execution or mark it non-viable."}</p>
-    <div class="decisions">
-      <div class="decision">
-        <button class="btn btn-teal" data-act="approve">Approve</button>
-        <p>Approve for execution — the Delivery Team creates an Action Plan next.</p>
+      ? "Review the idea, choose an outcome, and add feedback. Feedback is optional when approving and required for every other outcome."
+      : "This initiative was escalated by the ESL Lead. Choose an outcome and add feedback — optional when approving, required otherwise."}</p>
+    <form class="decision-form" id="decisionForm" novalidate>
+      <div class="field">
+        <label for="decisionOutcome">Outcome <span class="req">*</span></label>
+        <select id="decisionOutcome">
+          <option value="" selected>Select an outcome…</option>${optHtml}
+        </select>
+        <div class="err">Please choose an outcome.</div>
       </div>
-      ${isEsl ? `
-      <div class="decision">
-        <button class="btn btn-teal-outline" data-act="escalate">Escalate</button>
-        <p>Send to the Project Leader when the decision sits above ESL authority.</p>
-      </div>` : ""}
-      <div class="decision">
-        <button class="btn btn-red-outline" data-act="show-nv">Mark Non-Viable</button>
-        <p>Close the idea with written feedback for the Delivery Team.</p>
+      <div class="field">
+        <label for="decisionFeedback">Feedback <span class="fb-req req">*</span><span class="fb-optional hint">(optional for Approve)</span></label>
+        <textarea id="decisionFeedback" placeholder="Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…"></textarea>
+        <div class="err">Feedback is required for this outcome.</div>
       </div>
-      <div class="reveal" id="nvReveal" hidden>
-        <h3>Feedback for the Delivery Team <span class="req" style="color:var(--red)">*</span></h3>
-        <div class="field">
-          <textarea id="nvFeedback" placeholder="Explain why the idea is non-viable and what could make it viable."></textarea>
-          <div class="err">Feedback is required when marking an idea non-viable.</div>
-        </div>
-        <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:.8rem">
-          <button class="btn btn-ghost btn-sm" data-act="hide-nv">Cancel</button>
-          <button class="btn btn-red btn-sm" data-act="confirm-nv">Confirm Non-Viable</button>
-        </div>
+      <div class="form-actions" style="margin-top:0;border-top:none;padding-top:0">
+        <span></span>
+        <div class="right"><button type="submit" class="btn btn-red" data-act="submit-decision">Submit Decision →</button></div>
       </div>
-    </div>
+    </form>
   </div>
   ${commentsCard()}`;
 }
@@ -682,23 +735,22 @@ function viewPostForm() {
     <p class="sub">Action Plan ${esc(idea.actionPlan.inspectionId)} marked complete ${fmtDate(idea.actionPlan.completedAt)}.</p>
     <div class="form-grid">
       <div class="field full">
-        <label for="pif-comments">Completion Comments <span class="req">*</span></label>
+        <label for="pif-comments">Implementation Comments <span class="req">*</span></label>
         <textarea id="pif-comments" placeholder="What was delivered, what changed, lessons learned…"></textarea>
-        <div class="err">Please add completion comments.</div>
+        <div class="err">Please add implementation comments.</div>
       </div>
       <div class="field">
-        <label for="pif-sme">SME <span class="req">*</span></label>
-        <input type="text" id="pif-sme" placeholder="Subject matter expert consulted">
-        <div class="err">Please name the SME.</div>
+        <label for="pif-sme">Contact Person <span class="req">*</span></label>
+        <input type="text" id="pif-sme" placeholder="Person to contact about this initiative">
+        <div class="err">Please name the contact person.</div>
       </div>
       <div class="field">
         <label for="pif-link">Case Study Link <span class="hint">(optional)</span></label>
         <input type="url" id="pif-link" placeholder="https://…">
       </div>
       <div class="field full">
-        <label for="pif-value">Value <span class="req">*</span></label>
+        <label for="pif-value">Value <span class="hint">(optional)</span></label>
         <input type="text" id="pif-value" placeholder="Quantified or qualitative value delivered (e.g. incidents prevented, cost avoided)">
-        <div class="err">Please describe the value delivered.</div>
       </div>
     </div>
     <div class="form-actions">
@@ -722,10 +774,10 @@ function viewComplete() {
     <h2>Post-Implementation Review</h2>
     <p class="sub">Submitted ${fmtDate(p.submittedAt)}</p>
     <div class="kv">
-      <dt>Completion comments</dt><dd>${esc(p.completionComments)}</dd>
-      <dt>SME</dt><dd>${esc(p.sme)}</dd>
+      <dt>Implementation comments</dt><dd>${esc(p.completionComments)}</dd>
+      <dt>Contact person</dt><dd>${esc(p.sme)}</dd>
       <dt>Case study</dt><dd>${p.caseStudyLink ? `<a href="${esc(p.caseStudyLink)}" target="_blank" rel="noopener">${esc(p.caseStudyLink)}</a>` : "—"}</dd>
-      <dt>Value</dt><dd>${esc(p.value)}</dd>
+      <dt>Value</dt><dd>${esc(p.value) || "—"}</dd>
     </div>
     <div class="hero-actions" style="justify-content:flex-end">
       <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
@@ -810,15 +862,15 @@ function inspectionIdFor() {
 
 /* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
 const STEP_INFO = {
-  submit:   { desc: "The Delivery Team submits the idea on a single form — project context, the idea itself, benefit category, FSR categories, and any linked PC1 incident.",
+  submit:   { desc: "The Delivery Team submits the idea on a single form — project context, the idea itself, benefit categories, related FSR, and any linked PC1 incident.",
               outcomes: ["Idea is logged with an Initiative ID and moves to ESL Review."] },
-  esl:      { desc: "The ESL Lead reviews the submission, can add comments, and decides the outcome.",
-              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Escalate — the Project Leader makes the decision.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
+  esl:      { desc: "The ESL Lead reviews the full submission, adds feedback, and decides the outcome.",
+              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Escalate — the Project Leader makes the decision.", "Return for Detail — the Delivery Team revises and resubmits.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
   pl:       { desc: "The Project Leader decides on the escalated initiative.",
-              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
+              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Return for Detail — the ESL Lead revises and resubmits.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
   plan:     { desc: "The Delivery Team creates the Action Plan. The Inspection ID and action summary are prefilled; due date, person responsible, and comments are set by the team.",
               outcomes: ["Action Plan is delivered, then marked complete to open the Post-Implementation Form."] },
-  postimpl: { desc: "The Delivery Team reviews the original submission and closes out with completion comments, SME, case study link, and the value delivered.",
+  postimpl: { desc: "The Delivery Team reviews the original submission and closes out with implementation comments, contact person, case study link, and the value delivered.",
               outcomes: ["Initiative is complete and on record."] },
   done:     { desc: "The initiative is delivered, reviewed, and closed out.", outcomes: [] },
   feedback: { desc: "The Delivery Team receives the reviewer's feedback on the non-viable idea and acknowledges it to close the initiative.",
@@ -851,15 +903,15 @@ function viewRecap(node, state) {
         <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
         <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-        <dt>Benefit category</dt><dd>${esc(s.benefit)}</dd>
-        <dt>FSR categories</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+        <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
+        <dt>Related FSR</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
       </div>`;
   } else if (node.key === "esl" || node.key === "pl") {
     const d = idea.decisions[node.key];
-    const outcomeText = { approved: "Approved for execution.", escalated: "Escalated to the Project Leader.", "non-viable": "Marked non-viable." }[d.outcome];
+    const outcomeText = { approved: "Approved for execution.", escalated: "Escalated to the Project Leader.", "non-viable": "Marked non-viable.", returned: "Returned to the delivery team for more detail." }[d.outcome];
     body = `
-      <div class="callout ${d.outcome === "non-viable" ? "red" : "teal"}"><strong>Decision:</strong> ${outcomeText}${d.feedback ? `<br><strong>Feedback:</strong> ${esc(d.feedback)}` : ""}</div>
+      <div class="callout ${d.outcome === "non-viable" ? "red" : d.outcome === "returned" ? "amber" : "teal"}"><strong>Decision:</strong> ${outcomeText}${d.feedback ? `<br><strong>Feedback:</strong> ${esc(d.feedback)}` : ""}</div>
       <p class="sub" style="margin:.7rem 0 0">Decided ${fmtDateTime(d.at)}. Comments from this stage are in the activity log below.</p>`;
   } else if (node.key === "plan" && idea.actionPlan) {
     const ap = idea.actionPlan;
@@ -876,10 +928,10 @@ function viewRecap(node, state) {
     const p = idea.postImpl;
     body = `
       <div class="kv">
-        <dt>Completion comments</dt><dd>${esc(p.completionComments)}</dd>
-        <dt>SME</dt><dd>${esc(p.sme)}</dd>
+        <dt>Implementation comments</dt><dd>${esc(p.completionComments)}</dd>
+        <dt>Contact person</dt><dd>${esc(p.sme)}</dd>
         <dt>Case study</dt><dd>${p.caseStudyLink ? `<a href="${esc(p.caseStudyLink)}" target="_blank" rel="noopener">${esc(p.caseStudyLink)}</a>` : "—"}</dd>
-        <dt>Value</dt><dd>${esc(p.value)}</dd>
+        <dt>Value</dt><dd>${esc(p.value) || "—"}</dd>
       </div>`;
   } else {
     body = `<p class="sub" style="margin:0">${esc(STEP_INFO[node.key].desc)}</p>`;
@@ -913,8 +965,8 @@ function readDraftFromForm() {
     date: idea.draft.date,
     siteLocation: g("f-site").value, phase: g("f-phase").value,
     title: g("f-title").value, summary: g("f-summary").value,
-    benefit: g("f-benefit").value,
-    fsr: [...document.querySelectorAll('#f-fsr input:checked')].map(c => c.value),
+    benefit: [...document.querySelectorAll('[data-msel="f-benefit"] input:checked')].map(c => c.value),
+    fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
     incident: g("f-incident").value,
   };
 }
@@ -941,6 +993,8 @@ function bindStage() {
       toast("Draft saved.");
     };
   }
+  bindMultiSelects();
+  bindDecisionForm();
   const planForm = document.getElementById("planForm");
   if (planForm) planForm.onsubmit = handleCreatePlan;
   const pifForm = document.getElementById("pifForm");
@@ -949,6 +1003,51 @@ function bindStage() {
   $stage.querySelectorAll("[data-act]").forEach(el => {
     el.onclick = (e) => { e.preventDefault(); handleAction(el.dataset.act); };
   });
+}
+
+/* Wire up every custom multiselect: toggle open/close, keep the summary in
+   sync with the checkboxes, and close when clicking outside. */
+function bindMultiSelects() {
+  $stage.querySelectorAll(".msel").forEach(msel => {
+    const toggle = msel.querySelector(".msel-toggle");
+    const panel = msel.querySelector(".msel-panel");
+    const summary = msel.querySelector(".msel-summary");
+    const placeholder = summary.textContent;
+    const refresh = () => {
+      const picked = [...panel.querySelectorAll("input:checked")].map(c => c.value);
+      summary.textContent = picked.length ? picked.join(", ") : placeholder;
+      summary.classList.toggle("ph", picked.length === 0);
+    };
+    toggle.addEventListener("click", () => {
+      const open = msel.classList.toggle("open");
+      panel.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+    panel.addEventListener("change", refresh);
+  });
+  if (!bindMultiSelects._docBound) {
+    document.addEventListener("click", e => {
+      document.querySelectorAll(".msel.open").forEach(m => {
+        if (!m.contains(e.target)) {
+          m.classList.remove("open");
+          m.querySelector(".msel-panel").hidden = true;
+          m.querySelector(".msel-toggle").setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+    bindMultiSelects._docBound = true;
+  }
+}
+
+/* Decision form: show/hide the "required" marker on feedback as the outcome
+   changes (optional only for Approve). */
+function bindDecisionForm() {
+  const df = document.getElementById("decisionForm");
+  if (!df) return;
+  const outcome = document.getElementById("decisionOutcome");
+  const sync = () => df.classList.toggle("need-fb", !!outcome.value && outcome.value !== "approve");
+  outcome.addEventListener("change", sync);
+  sync();
 }
 
 function handleSubmitIdea(e) {
@@ -961,21 +1060,22 @@ function handleSubmitIdea(e) {
   bad = markInvalid(g("f-submitter"), !d.submitter.trim()) || bad;
   bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
   bad = markInvalid(g("f-phase"), !d.phase) || bad;
-  bad = markInvalid(g("f-benefit"), !d.benefit) || bad;
   bad = markInvalid(g("f-title"), !d.title.trim()) || bad;
   bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
-  document.getElementById("f-fsr").closest(".field").classList.toggle("invalid", d.fsr.length === 0);
-  bad = bad || d.fsr.length === 0;
+  document.getElementById("field-benefit").classList.toggle("invalid", d.benefit.length === 0);
+  document.getElementById("field-fsr").classList.toggle("invalid", d.fsr.length === 0);
+  bad = bad || d.benefit.length === 0 || d.fsr.length === 0;
   if (bad) { toast("Please complete the required fields."); return; }
 
-  idea.id = nextInitiativeId();
+  const revising = !!idea.returnStage;
+  if (!idea.id) idea.id = nextInitiativeId();
   idea.submission = Object.assign({}, d, {
     project: d.project.trim(), submitter: d.submitter.trim(),
     siteLocation: d.siteLocation.trim(), title: d.title.trim(), summary: d.summary.trim(),
     submittedAt: nowISO(),
   });
   idea.status = S.CONFIRM;
-  addLog("sys", "Idea submitted.", idea.submission.submitter, "Delivery Team");
+  addLog("sys", revising ? "Idea revised and resubmitted." : "Idea submitted.");
   save(); render();
 }
 
@@ -1008,7 +1108,6 @@ function handleSubmitPif(e) {
   let bad = false;
   bad = markInvalid(comments, !comments.value.trim()) || bad;
   bad = markInvalid(sme, !sme.value.trim()) || bad;
-  bad = markInvalid(value, !value.value.trim()) || bad;
   if (bad) { toast("Please complete the required fields."); return; }
   idea.postImpl = {
     completionComments: comments.value.trim(),
@@ -1022,12 +1121,60 @@ function handleSubmitPif(e) {
   save(); render(); toast("Initiative complete. 🎉");
 }
 
+/* Rebuild an editable draft from the frozen submission (used when an idea is
+   returned for detail). */
+function draftFromSubmission() {
+  const s = idea.submission;
+  return {
+    project: s.project, submitter: s.submitter, date: s.date,
+    siteLocation: s.siteLocation, phase: s.phase, title: s.title, summary: s.summary,
+    benefit: [...(s.benefit || [])], fsr: [...(s.fsr || [])], incident: s.incident,
+  };
+}
+
+/* Commit a reviewer decision. `stage` is "esl" or "pl". */
+function submitDecision(stage, outcome, fb) {
+  if (fb) addLog("comment", fb);
+  switch (outcome) {
+    case "approve":
+      idea.decisions[stage] = { outcome: "approved", feedback: fb || undefined, at: nowISO() };
+      addLog("sys", "Approved. Delivery Team to create Action Plan.");
+      idea.status = S.PLAN;
+      save(); render(); toast("Approved — over to the Delivery Team.");
+      break;
+    case "escalate":
+      idea.decisions.esl = { outcome: "escalated", feedback: fb, at: nowISO() };
+      idea.escalated = true;
+      addLog("sys", "Escalated to Project Leader.");
+      idea.status = S.PL;
+      save(); render(); toast("Escalated to the Project Leader.");
+      break;
+    case "non-viable":
+      idea.decisions[stage] = { outcome: "non-viable", feedback: fb, at: nowISO() };
+      addLog("sys", "Marked Non-Viable. Feedback provided for Delivery Team.");
+      idea.status = S.FEEDBACK;
+      save(); render(); toast("Marked non-viable — feedback sent to the Delivery Team.");
+      break;
+    case "return": {
+      idea.decisions[stage] = { outcome: "returned", feedback: fb, at: nowISO() };
+      const to = stage === "pl" ? "ESL Lead" : "Delivery Team";
+      addLog("sys", `Returned for detail to the ${to}.`);
+      idea.returnStage = stage;
+      idea.draft = draftFromSubmission();
+      idea.status = S.DRAFT;
+      save(); render(); toast(`Returned to the ${to} for more detail.`);
+      break;
+    }
+  }
+}
+
 function handleAction(act) {
   const stageKey = idea.status === S.ESL ? "esl" : "pl";
   switch (act) {
     case "back": peek = null; render(); break;
-    case "to-esl":
-      idea.status = S.ESL;
+    case "continue-review":
+      idea.status = idea.returnStage === "pl" ? S.PL : S.ESL;
+      idea.returnStage = null;
       save(); render();
       break;
     case "add-comment": {
@@ -1038,35 +1185,14 @@ function handleAction(act) {
       save(); render(); toast("Comment added.");
       break;
     }
-    case "approve":
-      idea.decisions[stageKey] = { outcome: "approved", at: nowISO() };
-      addLog("sys", "Approved. Delivery Team to create Action Plan.");
-      idea.status = S.PLAN;
-      save(); render(); toast("Approved — over to the Delivery Team.");
-      break;
-    case "escalate":
-      idea.decisions.esl = { outcome: "escalated", at: nowISO() };
-      idea.escalated = true;
-      addLog("sys", "Escalated to Project Leader.");
-      idea.status = S.PL;
-      save(); render(); toast("Escalated to the Project Leader.");
-      break;
-    case "show-nv": {
-      const r = document.getElementById("nvReveal");
-      r.hidden = false;
-      document.getElementById("nvFeedback").focus();
-      break;
-    }
-    case "hide-nv":
-      document.getElementById("nvReveal").hidden = true;
-      break;
-    case "confirm-nv": {
-      const fb = document.getElementById("nvFeedback");
-      if (!fb.value.trim()) { markInvalid(fb, true); toast("Feedback is required."); return; }
-      idea.decisions[stageKey] = { outcome: "non-viable", feedback: fb.value.trim(), at: nowISO() };
-      addLog("sys", "Marked Non-Viable. Feedback provided for Delivery Team.");
-      idea.status = S.FEEDBACK;
-      save(); render(); toast("Marked non-viable — feedback sent to the Delivery Team.");
+    case "submit-decision": {
+      const outcomeEl = document.getElementById("decisionOutcome");
+      const fbEl = document.getElementById("decisionFeedback");
+      const outcome = outcomeEl.value;
+      const fb = fbEl.value.trim();
+      if (!outcome) { markInvalid(outcomeEl, true); toast("Please choose an outcome."); return; }
+      if (outcome !== "approve" && !fb) { markInvalid(fbEl, true); toast("Feedback is required for this outcome."); return; }
+      submitDecision(stageKey, outcome, fb);
       break;
     }
     case "mark-complete":
