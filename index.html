@@ -29,6 +29,7 @@
     --radius:10px;
     --shadow:0 1px 3px rgba(40,45,50,.08),0 4px 14px rgba(40,45,50,.05);
     --font:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%23878d92' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;min-height:100vh}
@@ -100,6 +101,7 @@
   .field input[type=text],.field input[type=url],.field input[type=date],.field select,.field textarea{
     width:100%;border:1px solid var(--input-line);border-radius:6px;padding:.6rem .7rem;background:#fff;transition:border-color .15s,box-shadow .15s}
   .field textarea{min-height:96px;resize:vertical}
+  .field select{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:2.1rem;background-image:var(--chevron);background-repeat:no-repeat;background-position:right .75rem center;background-size:.62rem}
   .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
   .field .auto{background:var(--soft)!important;color:#5f6368}
   .field .help{font-size:.73rem;color:var(--muted);margin-top:.3rem}
@@ -116,7 +118,7 @@
   .msel-toggle:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
   .msel-summary{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .msel-summary.ph{color:var(--muted)}
-  .msel-caret{flex:none;color:var(--muted);font-size:.65rem;transition:transform .15s}
+  .msel-caret{flex:none;width:.62rem;height:.62rem;background:var(--chevron) no-repeat center/contain;transition:transform .15s}
   .msel.open .msel-caret{transform:rotate(180deg)}
   .msel.open .msel-toggle{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
   .msel-panel{position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--input-line);border-radius:6px;box-shadow:var(--shadow);padding:.35rem;max-height:250px;overflow-y:auto;gap:.1rem}
@@ -510,7 +512,7 @@ function multiSelect(id, options, selected, placeholder) {
   <div class="msel" data-msel="${id}">
     <button type="button" class="msel-toggle" aria-haspopup="listbox" aria-expanded="false">
       <span class="msel-summary ${count ? "" : "ph"}">${esc(summary)}</span>
-      <span class="msel-caret">▾</span>
+      <span class="msel-caret"></span>
     </button>
     <div class="msel-panel" hidden>
       ${[...options].sort((a, b) => a.localeCompare(b)).map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}
@@ -661,7 +663,7 @@ function viewReview(who) {
         <div class="err">Please choose an outcome.</div>
       </div>
       <div class="field">
-        <label for="decisionFeedback">Feedback <span class="fb-req req">*</span><span class="fb-optional hint">(optional for Approve)</span></label>
+        <label for="decisionFeedback"><span id="decisionFeedbackLabelText">Feedback</span> <span class="fb-req req">*</span><span class="fb-optional hint">(optional for Approve)</span></label>
         <textarea id="decisionFeedback" placeholder="Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…"></textarea>
         <div class="err">Feedback is required for this outcome.</div>
       </div>
@@ -692,8 +694,8 @@ function viewPlanForm() {
         <div class="err">Please set a due date.</div>
       </div>
       <div class="field full">
-        <label for="ap-summary">Action Required Summary <span class="hint">(prefilled)</span></label>
-        <textarea id="ap-summary" class="auto" readonly>Implement approved initiative: ${esc(idea.submission.summary)}</textarea>
+        <label for="ap-summary">Action Required Summary <span class="hint">(prefilled, editable)</span></label>
+        <textarea id="ap-summary">Implement approved initiative: ${esc(idea.submission.summary)}</textarea>
       </div>
       <div class="field">
         <label for="ap-person">Person Responsible <span class="req">*</span></label>
@@ -1057,7 +1059,15 @@ function bindDecisionForm() {
   const df = document.getElementById("decisionForm");
   if (!df) return;
   const outcome = document.getElementById("decisionOutcome");
-  const sync = () => df.classList.toggle("need-fb", !!outcome.value && outcome.value !== "approve");
+  const labelText = document.getElementById("decisionFeedbackLabelText");
+  const fbField = document.getElementById("decisionFeedback");
+  const isEsl = idea.status === S.ESL;
+  const sync = () => {
+    df.classList.toggle("need-fb", !!outcome.value && outcome.value !== "approve");
+    const escalating = isEsl && outcome.value === "escalate";
+    labelText.textContent = escalating ? "Notes for Project Leader" : "Feedback";
+    fbField.placeholder = escalating ? "Add notes for the Project Leader…" : `Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…`;
+  };
   outcome.addEventListener("change", sync);
   sync();
 }
