@@ -320,7 +320,7 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "", phase: "", discipline: "", title: "", summary: "",
+      siteLocation: "", phase: "", ideaType: "new", discipline: "", title: "", summary: "",
       benefit: [], fsr: [], incident: "",
     },
     submission: null,      // frozen copy on submit
@@ -525,30 +525,16 @@ function viewSubmitForm() {
   const returnFb = revising ? (idea.decisions[idea.returnStage] || {}).feedback : "";
   const returnBanner = revising ? `
     <div class="callout amber" style="margin-bottom:1.2rem"><strong>Returned for detail by the ${idea.returnStage === "pl" ? "Project Leader" : "ESL Lead"}:</strong> ${esc(returnFb || "Please add more detail before resubmitting.")}</div>`
-    : `<div class="info-banner"><span class="i">i</span>Fields below are auto-populated from your profile. Edit if needed.</div>`;
+    : "";
 
   return `
   <form class="card" id="submitForm" novalidate>
     ${returnBanner}
     <div class="form-grid">
       <div class="field">
-        <label for="f-project">Project Name <span class="req">*</span> <span class="hint">(auto-populated, editable)</span></label>
-        <input type="text" id="f-project" class="auto" value="${esc(d.project)}">
-        <div class="err">Project name is required.</div>
-      </div>
-      <div class="field">
-        <label for="f-submitter">Submitter Name <span class="hint">(auto-populated)</span></label>
-        <input type="text" id="f-submitter" class="auto" value="${esc(d.submitter)}">
-        <div class="err">Submitter name is required.</div>
-      </div>
-      <div class="field">
         <label for="f-site">Site Location <span class="req">*</span></label>
         <input type="text" id="f-site" placeholder="e.g. North Pylon Pier 3" value="${esc(d.siteLocation)}">
         <div class="err">Please enter the site location.</div>
-      </div>
-      <div class="field">
-        <label for="f-date">Date <span class="hint">(auto-populated)</span></label>
-        <input type="text" id="f-date" class="auto" value="${fmtDate(d.date)}" readonly>
       </div>
       <div class="field">
         <label for="f-phase">Applicable Phase <span class="req">*</span></label>
@@ -556,6 +542,23 @@ function viewSubmitForm() {
           <option value="" ${d.phase ? "" : "selected"}>Select phase…</option>${phaseOpts}
         </select>
         <div class="err">Please select the applicable phase.</div>
+      </div>
+      <div class="field full">
+        <label>Idea Type <span class="req">*</span></label>
+        <div class="checks">
+          <label><input type="radio" name="ideaType" value="new" ${d.ideaType === "implementation" ? "" : "checked"}> New idea</label>
+          <label><input type="radio" name="ideaType" value="implementation" ${d.ideaType === "implementation" ? "checked" : ""}> Implementation of previous idea</label>
+        </div>
+      </div>
+      <div class="field full">
+        <label for="f-title">Idea Title <span class="req">*</span></label>
+        <input type="text" id="f-title" maxlength="120" placeholder="Short, descriptive name for the idea" value="${esc(d.title)}">
+        <div class="err">Please give the idea a title.</div>
+      </div>
+      <div class="field full">
+        <label for="f-summary">Summary <span class="req">*</span></label>
+        <textarea id="f-summary" placeholder="What is the idea, what problem does it solve, and how would it work?">${esc(d.summary)}</textarea>
+        <div class="err">Please describe the idea.</div>
       </div>
       <div class="field">
         <label for="f-discipline">Discipline <span class="req">*</span></label>
@@ -569,23 +572,13 @@ function viewSubmitForm() {
         ${multiSelect("f-benefit", BENEFIT_CATEGORIES, d.benefit, "Select categories…")}
         <div class="err">Please choose at least one benefit category.</div>
       </div>
-      <div class="field full">
-        <label for="f-title">Idea Title <span class="req">*</span></label>
-        <input type="text" id="f-title" maxlength="120" placeholder="Short, descriptive name for the idea" value="${esc(d.title)}">
-        <div class="err">Please give the idea a title.</div>
-      </div>
-      <div class="field full">
-        <label for="f-summary">Summary <span class="req">*</span></label>
-        <textarea id="f-summary" placeholder="What is the idea, what problem does it solve, and how would it work?">${esc(d.summary)}</textarea>
-        <div class="err">Please describe the idea.</div>
-      </div>
-      <div class="field full" id="field-fsr">
+      <div class="field" id="field-fsr">
         <label>Related FSR <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
         ${multiSelect("f-fsr", FSR_CATEGORIES, d.fsr, "Select related FSR…")}
         <div class="err">Select at least one related FSR.</div>
       </div>
-      <div class="field full">
-        <label for="f-incident">Linked PC1 Incident <span class="hint">(optional — link the Event ID if this idea responds to a PC1 incident)</span></label>
+      <div class="field">
+        <label for="f-incident">Linked Event <span class="hint">(optional — link the Event ID if this idea responds to a PC1 incident)</span></label>
         <select id="f-incident">
           <option value="" ${d.incident ? "" : "selected"}>No linked incident</option>${incidentOpts}
         </select>
@@ -974,9 +967,10 @@ function readDraftFromForm() {
   const g = id => document.getElementById(id);
   if (!g("f-title")) return;
   idea.draft = {
-    project: g("f-project").value, submitter: g("f-submitter").value,
+    project: idea.draft.project, submitter: idea.draft.submitter,
     date: idea.draft.date,
     siteLocation: g("f-site").value, phase: g("f-phase").value,
+    ideaType: (document.querySelector('input[name="ideaType"]:checked') || {}).value || "new",
     discipline: g("f-discipline").value,
     title: g("f-title").value, summary: g("f-summary").value,
     benefit: [...document.querySelectorAll('[data-msel="f-benefit"] input:checked')].map(c => c.value),
@@ -1070,8 +1064,6 @@ function handleSubmitIdea(e) {
   const g = id => document.getElementById(id);
   const d = idea.draft;
   let bad = false;
-  bad = markInvalid(g("f-project"), !d.project.trim()) || bad;
-  bad = markInvalid(g("f-submitter"), !d.submitter.trim()) || bad;
   bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
   bad = markInvalid(g("f-phase"), !d.phase) || bad;
   bad = markInvalid(g("f-discipline"), !d.discipline) || bad;
