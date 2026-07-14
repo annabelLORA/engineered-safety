@@ -334,6 +334,7 @@ function freshIdea() {
     actionPlan: null,
     postImpl: null,
     log: [],
+    savedForLater: false,  // true once a non-viable idea has been saved to the future-projects library
   };
 }
 
@@ -350,6 +351,35 @@ function nextInitiativeId() {
   let n = 1;
   try { n = parseInt(localStorage.getItem(KEY + "-seq") || "1", 10); localStorage.setItem(KEY + "-seq", String(n + 1)); } catch (e) {}
   return "ESI-2026-" + String(n).padStart(3, "0");
+}
+
+/* Library of non-viable ideas saved by the Delivery Team for future projects */
+const SAVED_KEY = "es-flow-v2-saved-projects";
+function loadSavedProjects() {
+  try { const raw = localStorage.getItem(SAVED_KEY); const list = raw ? JSON.parse(raw) : []; return Array.isArray(list) ? list : []; } catch (e) { return []; }
+}
+function saveProjectForLater() {
+  if (idea.savedForLater) return;
+  const s = idea.submission;
+  const d = idea.decisions.pl || idea.decisions.esl;
+  const list = loadSavedProjects();
+  list.push({
+    id: idea.id,
+    title: s.title,
+    summary: s.summary,
+    project: s.project,
+    discipline: s.discipline,
+    benefit: s.benefit,
+    fsr: s.fsr,
+    decidedBy: idea.decisions.pl ? "Project Leader" : "ESL Lead",
+    feedback: d ? d.feedback : "",
+    savedAt: nowISO(),
+  });
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch (e) {}
+  idea.savedForLater = true;
+  addLog("sys", "Idea saved to the future-projects library.");
+  save(); render();
+  toast("Saved for future projects.");
 }
 
 const nowISO = () => new Date().toISOString();
@@ -806,8 +836,11 @@ function viewFeedback() {
     <p class="sub">This idea was marked non-viable by the ${decider}. The feedback below is for your team.</p>
     <div class="callout red"><strong>Feedback:</strong> ${esc(fb)}</div>
     <div class="form-actions">
-      <span style="font-size:.78rem;color:var(--muted)">Acknowledging confirms the Delivery Team has received this feedback and closes the initiative.</span>
-      <div class="right"><button class="btn btn-red" data-act="ack-feedback">Acknowledge Feedback →</button></div>
+      <span style="font-size:.78rem;color:var(--muted)">${idea.savedForLater ? "Saved to the future-projects library." : "Not ready to rework right now? Save this idea for a future project."}</span>
+      <div class="right">
+        <button class="btn btn-ghost" data-act="save-for-later" ${idea.savedForLater ? "disabled" : ""}>${idea.savedForLater ? "✓ Saved for Future Projects" : "Save for Future Projects"}</button>
+        <button class="btn btn-red" data-act="ack-feedback">Acknowledge Feedback →</button>
+      </div>
     </div>
   </div>
   ${commentsCard()}`;
@@ -821,6 +854,7 @@ function viewClosed() {
     <div class="iid">${idea.id}</div>
     <p>The Delivery Team has received the reviewer's feedback on <strong>${esc(idea.submission.title)}</strong>. Rework the idea and submit it again any time.</p>
     <div class="hero-actions">
+      <button class="btn btn-ghost" data-act="save-for-later" ${idea.savedForLater ? "disabled" : ""}>${idea.savedForLater ? "✓ Saved for Future Projects" : "Save for Future Projects"}</button>
       <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
     </div>
   </div>
@@ -1227,6 +1261,9 @@ function handleAction(act) {
       idea.status = S.CLOSED;
       addLog("sys", "Feedback received by Delivery Team. Initiative closed.");
       save(); render(); toast("Feedback acknowledged.");
+      break;
+    case "save-for-later":
+      saveProjectForLater();
       break;
     case "restart":
       idea = freshIdea();
