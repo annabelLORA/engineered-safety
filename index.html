@@ -249,12 +249,12 @@ const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Hando
 const DISCIPLINES = ["Civils", "Structural", "Building", "Other"];
 
 const BENEFIT_CATEGORIES = [
-  "Fatality & Serious Injury Prevention",
-  "Occupational Health & Wellbeing",
-  "Environmental Protection",
-  "Process Safety",
-  "Quality & Assurance",
-  "Efficiency & Cost Reduction",
+  "Acute Safety",
+  "Chronic Health",
+  "Public Safety",
+  "Environment & Sustainability",
+  "Delivery Efficiency & Constructability",
+  "Future Operations",
 ];
 
 const FSR_CATEGORIES = [
@@ -320,8 +320,12 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "", phase: "", ideaType: "new", discipline: "", title: "", summary: "",
-      benefit: [], fsr: [], incident: "",
+      siteLocation: "FBA North", phase: "Construction", ideaType: "new", discipline: "Structural",
+      title: "Use of precast viaduct structures constructed at ground level.",
+      summary: "Maximising the use of precast concrete bridge piers and modular spans, which are assembled off-site and craned into place during scheduled short-term network closures. Drastically reduces high-risk construction hours over water, mitigates environmental spill risks, and significantly limits disruption to critical transport arteries.",
+      benefit: ["Acute Safety", "Delivery Efficiency & Constructability"],
+      fsr: ["Falls & Dropped Objects", "Formwork & Falsework"],
+      incident: "",
     },
     submission: null,      // frozen copy on submit
     decisions: {},         // esl: {outcome, feedback?, at}, pl: {...}
