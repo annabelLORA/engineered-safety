@@ -98,6 +98,8 @@
   .field label{display:block;font-size:.78rem;font-weight:700;color:var(--label);margin-bottom:.35rem}
   .field label .req{color:var(--red)}
   .field label .hint{color:var(--muted);font-weight:500}
+  .field.checkbox-field label{display:flex;align-items:center;gap:.5rem;font-weight:600;cursor:pointer}
+  .field.checkbox-field input[type=checkbox]{width:16px;height:16px;flex:none}
   .field input[type=text],.field input[type=url],.field input[type=date],.field select,.field textarea{
     width:100%;border:1px solid var(--input-line);border-radius:6px;padding:.6rem .7rem;background:#fff;transition:border-color .15s,box-shadow .15s}
   .field textarea{min-height:96px;resize:vertical}
@@ -358,7 +360,7 @@ const SAVED_KEY = "es-flow-v2-saved-projects";
 function loadSavedProjects() {
   try { const raw = localStorage.getItem(SAVED_KEY); const list = raw ? JSON.parse(raw) : []; return Array.isArray(list) ? list : []; } catch (e) { return []; }
 }
-function saveProjectForLater() {
+function saveProjectForLater(opts) {
   if (idea.savedForLater) return;
   const s = idea.submission;
   const d = idea.decisions.pl || idea.decisions.esl;
@@ -378,8 +380,7 @@ function saveProjectForLater() {
   try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch (e) {}
   idea.savedForLater = true;
   addLog("sys", "Idea saved to the future-projects library.");
-  save(); render();
-  toast("Saved for future projects.");
+  if (!(opts && opts.silent)) { save(); render(); toast("Saved for future projects."); }
 }
 
 const nowISO = () => new Date().toISOString();
@@ -696,6 +697,12 @@ function viewReview(who) {
         <label for="decisionFeedback"><span id="decisionFeedbackLabelText">Feedback</span> <span class="fb-req req">*</span><span class="fb-optional hint">(optional for Approve)</span></label>
         <textarea id="decisionFeedback" placeholder="Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…"></textarea>
         <div class="err">Feedback is required for this outcome.</div>
+      </div>
+      <div class="field checkbox-field" id="field-save-future" hidden>
+        <label for="decisionSaveForFuture">
+          <input type="checkbox" id="decisionSaveForFuture">
+          Save this idea for future projects
+        </label>
       </div>
       <div class="form-actions" style="margin-top:0;border-top:none;padding-top:0">
         <span></span>
@@ -1095,12 +1102,17 @@ function bindDecisionForm() {
   const outcome = document.getElementById("decisionOutcome");
   const labelText = document.getElementById("decisionFeedbackLabelText");
   const fbField = document.getElementById("decisionFeedback");
+  const saveFutureField = document.getElementById("field-save-future");
+  const saveFutureBox = document.getElementById("decisionSaveForFuture");
   const isEsl = idea.status === S.ESL;
   const sync = () => {
     df.classList.toggle("need-fb", !!outcome.value && outcome.value !== "approve");
     const escalating = isEsl && outcome.value === "escalate";
     labelText.textContent = escalating ? "Notes for Project Leader" : "Feedback";
     fbField.placeholder = escalating ? "Add notes for the Project Leader…" : `Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…`;
+    const nonViable = outcome.value === "non-viable";
+    saveFutureField.hidden = !nonViable;
+    if (!nonViable) saveFutureBox.checked = false;
   };
   outcome.addEventListener("change", sync);
   sync();
@@ -1189,7 +1201,7 @@ function draftFromSubmission() {
 }
 
 /* Commit a reviewer decision. `stage` is "esl" or "pl". */
-function submitDecision(stage, outcome, fb) {
+function submitDecision(stage, outcome, fb, saveForFuture) {
   if (fb) addLog("comment", fb);
   switch (outcome) {
     case "approve":
@@ -1209,7 +1221,9 @@ function submitDecision(stage, outcome, fb) {
       idea.decisions[stage] = { outcome: "non-viable", feedback: fb, at: nowISO() };
       addLog("sys", "Marked Non-Viable. Feedback provided for Delivery Team.");
       idea.status = S.FEEDBACK;
-      save(); render(); toast("Marked non-viable — feedback sent to the Delivery Team.");
+      if (saveForFuture) saveProjectForLater({ silent: true });
+      save(); render();
+      toast(saveForFuture ? "Marked non-viable — feedback sent and saved for future projects." : "Marked non-viable — feedback sent to the Delivery Team.");
       break;
     case "return": {
       idea.decisions[stage] = { outcome: "returned", feedback: fb, at: nowISO() };
@@ -1244,11 +1258,12 @@ function handleAction(act) {
     case "submit-decision": {
       const outcomeEl = document.getElementById("decisionOutcome");
       const fbEl = document.getElementById("decisionFeedback");
+      const saveFutureEl = document.getElementById("decisionSaveForFuture");
       const outcome = outcomeEl.value;
       const fb = fbEl.value.trim();
       if (!outcome) { markInvalid(outcomeEl, true); toast("Please choose an outcome."); return; }
       if (outcome !== "approve" && !fb) { markInvalid(fbEl, true); toast("Feedback is required for this outcome."); return; }
-      submitDecision(stageKey, outcome, fb);
+      submitDecision(stageKey, outcome, fb, !!(saveFutureEl && saveFutureEl.checked));
       break;
     }
     case "mark-complete":
