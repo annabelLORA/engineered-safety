@@ -113,6 +113,16 @@
   .checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.4rem .8rem;border:1px solid var(--input-line);border-radius:6px;padding:.7rem .8rem}
   .checks label{display:flex;align-items:center;gap:.5rem;font-size:.86rem;font-weight:500;margin:0;cursor:pointer;color:var(--ink)}
   .checks input{accent-color:var(--teal);width:15px;height:15px}
+  .field input[type=file]{width:100%;border:1px dashed var(--input-line);border-radius:6px;padding:.55rem .7rem;background:#fff;font-size:.86rem;color:var(--label)}
+  .field input[type=file]::file-selector-button{font-family:inherit;font-weight:700;font-size:.8rem;color:var(--teal-dark);background:var(--teal-soft);border:none;border-radius:5px;padding:.35rem .8rem;margin-right:.7rem;cursor:pointer}
+  .attach-list{list-style:none;display:flex;flex-direction:column;gap:.35rem;margin-top:.55rem}
+  .attach-list li{display:flex;align-items:center;gap:.6rem;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:.4rem .6rem;font-size:.83rem}
+  .attach-list li.empty{background:none;border:none;color:var(--muted);padding:.1rem 0;font-size:.78rem}
+  .attach-list .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--label)}
+  .attach-list .fsize{flex:none;color:var(--muted);font-size:.76rem}
+  .attach-list .frm{flex:none;border:none;background:none;color:var(--muted);font-size:.9rem;line-height:1;padding:.1rem .3rem;border-radius:4px}
+  .attach-list .frm:hover{color:var(--red);background:var(--red-soft)}
+  .review-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:.4rem}
 
   /* ---------- Multiselect dropdown ---------- */
   .msel{position:relative}
@@ -267,7 +277,7 @@ const FSR_CATEGORIES = [
   "Hazardous Energy", "Electrical Safety", "Hazardous Dust & Fibres",
   "Confined Spaces", "Falls & Dropped Objects", "Scaffolding",
   "Formwork & Falsework", "Work in, over & Adjacent to Water",
-  "Precast Concrete", "Demolition",
+  "Precast Concrete", "Demolition", "Other",
 ];
 
 const PC1_INCIDENTS = [
@@ -283,7 +293,6 @@ const S = {
   DRAFT: "draft",           // Delivery Team filling the form
   CONFIRM: "confirm",       // submission confirmation screen
   ESL: "review-esl",        // ESL Lead review
-  PL: "review-pl",          // Project Leader decision (escalated)
   PLAN: "plan",             // Delivery Team creates Action Plan
   EXECUTION: "execution",   // Action Plan in progress
   POST: "post-impl",        // Post-Implementation Form
@@ -294,7 +303,7 @@ const S = {
 
 const ROLE_FOR_STATUS = {
   [S.DRAFT]: "Delivery Team", [S.CONFIRM]: "Delivery Team",
-  [S.ESL]: "ESL Lead", [S.PL]: "Project Leader",
+  [S.ESL]: "ESL Lead",
   [S.PLAN]: "Delivery Team", [S.EXECUTION]: "Delivery Team",
   [S.POST]: "Delivery Team", [S.COMPLETE]: "Delivery Team",
   [S.FEEDBACK]: "Delivery Team", [S.CLOSED]: "Delivery Team",
@@ -302,7 +311,7 @@ const ROLE_FOR_STATUS = {
 
 const TITLE_FOR_STATUS = {
   [S.DRAFT]: "Submit a Safety Idea", [S.CONFIRM]: "Idea Submitted",
-  [S.ESL]: "ESL Lead Review", [S.PL]: "Project Leader Decision",
+  [S.ESL]: "ESL Lead Review",
   [S.PLAN]: "Create Action Plan", [S.EXECUTION]: "Action Plan in Progress",
   [S.POST]: "Post-Implementation Form", [S.COMPLETE]: "Initiative Complete",
   [S.FEEDBACK]: "Reviewer Feedback", [S.CLOSED]: "Initiative Closed",
@@ -314,21 +323,24 @@ const TITLE_FOR_STATUS = {
 const KEY = "es-flow-v2";
 let idea = null;
 let peek = null; // key of a tracker step being viewed (recap/preview), or null
+let eslEditing = false; // true while the ESL Lead is editing the submission inline
 
 function freshIdea() {
   return {
     status: S.DRAFT,
     id: null,
-    escalated: false,
-    returnStage: null,     // "esl" | "pl" while a returned idea is being revised & resubmitted
+    returnStage: null,     // "esl" while a returned idea is being revised & resubmitted
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
       siteLocation: "FBA North", phase: "Construction", ideaType: "new", discipline: "Structural",
+      disciplineOther: "",
       title: "Use of precast viaduct structures constructed at ground level.",
       summary: "Maximising the use of precast concrete bridge piers and modular spans, which are assembled off-site and craned into place during scheduled short-term network closures. Drastically reduces high-risk construction hours over water, mitigates environmental spill risks, and significantly limits disruption to critical transport arteries.",
       benefit: ["Acute Safety", "Delivery Efficiency & Constructability"],
       fsr: ["Falls & Dropped Objects", "Formwork & Falsework"],
+      fsrOther: "",
+      attachments: [],
       incident: "",
     },
     submission: null,      // frozen copy on submit
@@ -363,7 +375,7 @@ function loadSavedProjects() {
 function saveProjectForLater(opts) {
   if (idea.savedForLater) return;
   const s = idea.submission;
-  const d = idea.decisions.pl || idea.decisions.esl;
+  const d = idea.decisions.esl;
   const list = loadSavedProjects();
   list.push({
     id: idea.id,
@@ -373,7 +385,7 @@ function saveProjectForLater(opts) {
     discipline: s.discipline,
     benefit: s.benefit,
     fsr: s.fsr,
-    decidedBy: idea.decisions.pl ? "Project Leader" : "ESL Lead",
+    decidedBy: "ESL Lead",
     feedback: d ? d.feedback : "",
     savedAt: nowISO(),
   });
@@ -399,10 +411,8 @@ function esc(s) {
 function addLog(type, text, who, role) {
   idea.log.push({ at: nowISO(), who: who || actorName(), role: role || currentRole(), type, text });
 }
-/* Role currently acting — while an ESL-returned idea is revised by the ESL Lead
-   (returnStage === "pl"), the submit/confirm screens are driven by the ESL Lead. */
+/* Role currently acting for the given status. */
 function currentRole() {
-  if ((idea.status === S.DRAFT || idea.status === S.CONFIRM) && idea.returnStage === "pl") return "ESL Lead";
   return ROLE_FOR_STATUS[idea.status];
 }
 function actorName() {
@@ -426,7 +436,6 @@ function buildPath() {
     { key: "submit", name: "Submit Idea", role: "Delivery Team" },
     { key: "esl", name: "ESL Review", role: "ESL Lead" },
   ];
-  if (idea.escalated) nodes.push({ key: "pl", name: "Project Leader Decision", role: "Project Leader" });
   if (nonViable) {
     nodes.push({ key: "feedback", name: "Receive Feedback", role: "Delivery Team" });
   } else {
@@ -441,9 +450,8 @@ function buildPath() {
 
 function currentKey() {
   switch (idea.status) {
-    case S.DRAFT: case S.CONFIRM: return idea.returnStage === "pl" ? "esl" : "submit";
+    case S.DRAFT: case S.CONFIRM: return "submit";
     case S.ESL: return "esl";
-    case S.PL: return "pl";
     case S.PLAN: case S.EXECUTION: return "plan";
     case S.POST: return "postimpl";
     case S.COMPLETE: return "done";
@@ -457,7 +465,6 @@ function nodeStates(nodes) {
   const terminal = [S.COMPLETE, S.CLOSED].includes(idea.status);
   return nodes.map((n, i) => {
     if (n.key === "esl" && idea.decisions.esl?.outcome === "non-viable") return "dead";
-    if (n.key === "pl" && idea.decisions.pl?.outcome === "non-viable") return "dead";
     if (i < cur) return "done";
     if (i === cur) return terminal ? "done" : "now";
     return "next";
@@ -523,8 +530,7 @@ function viewStage() {
   switch (idea.status) {
     case S.DRAFT: return viewSubmitForm();
     case S.CONFIRM: return viewConfirm();
-    case S.ESL: return viewReview("esl");
-    case S.PL: return viewReview("pl");
+    case S.ESL: return eslEditing ? viewEslEditForm() : viewReview();
     case S.PLAN: return viewPlanForm();
     case S.EXECUTION: return viewExecution();
     case S.POST: return viewPostForm();
@@ -546,27 +552,20 @@ function multiSelect(id, options, selected, placeholder) {
       <span class="msel-caret"></span>
     </button>
     <div class="msel-panel" hidden>
-      ${[...options].sort((a, b) => a.localeCompare(b)).map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}
+      ${[...options].sort((a, b) => a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)).map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}
     </div>
   </div>`;
 }
 
-/* ---- Stage 1: submission form ---- */
-function viewSubmitForm() {
-  const d = idea.draft;
-  const revising = !!idea.returnStage;
+/* Shared field grid used by both the submission form and the ESL Lead's
+   inline edit form. Field IDs are identical in both so the same
+   readDraftFromForm / validation helpers drive them. */
+function submissionFormGrid(d) {
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
   const disciplineOpts = DISCIPLINES.map(p => `<option ${d.discipline === p ? "selected" : ""}>${esc(p)}</option>`).join("");
   const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
 
-  const returnFb = revising ? (idea.decisions[idea.returnStage] || {}).feedback : "";
-  const returnBanner = revising ? `
-    <div class="callout amber" style="margin-bottom:1.2rem"><strong>Returned for detail by the ${idea.returnStage === "pl" ? "Project Leader" : "ESL Lead"}:</strong> ${esc(returnFb || "Please add more detail before resubmitting.")}</div>`
-    : "";
-
   return `
-  <form class="card" id="submitForm" novalidate>
-    ${returnBanner}
     <div class="form-grid">
       <div class="field">
         <label for="f-site">Site Location <span class="req">*</span></label>
@@ -604,6 +603,11 @@ function viewSubmitForm() {
         </select>
         <div class="err">Please select the discipline.</div>
       </div>
+      <div class="field full" id="field-discipline-other" ${d.discipline === "Other" ? "" : "hidden"}>
+        <label for="f-discipline-other">Please specify the discipline <span class="req">*</span></label>
+        <input type="text" id="f-discipline-other" placeholder="Describe the discipline" value="${esc(d.disciplineOther || "")}">
+        <div class="err">Please specify the discipline.</div>
+      </div>
       <div class="field" id="field-benefit">
         <label>Benefit Category <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
         ${multiSelect("f-benefit", BENEFIT_CATEGORIES, d.benefit, "Select categories…")}
@@ -614,13 +618,40 @@ function viewSubmitForm() {
         ${multiSelect("f-fsr", FSR_CATEGORIES, d.fsr, "Select related FSR…")}
         <div class="err">Select at least one related FSR.</div>
       </div>
+      <div class="field full" id="field-fsr-other" ${(d.fsr || []).includes("Other") ? "" : "hidden"}>
+        <label for="f-fsr-other">Please specify the other FSR <span class="req">*</span></label>
+        <input type="text" id="f-fsr-other" placeholder="Describe the related FSR" value="${esc(d.fsrOther || "")}">
+        <div class="err">Please specify the other FSR.</div>
+      </div>
       <div class="field">
         <label for="f-incident">Linked Event <span class="hint">(optional)</span></label>
         <select id="f-incident">
           <option value="" ${d.incident ? "" : "selected"}>No linked incident</option>${incidentOpts}
         </select>
       </div>
-    </div>
+      <div class="field full">
+        <label for="f-files">Attachments <span class="hint">(optional)</span></label>
+        <input type="file" id="f-files" multiple>
+        <div class="help">Attach supporting documents, drawings, or photos.</div>
+        <ul id="attach-list" class="attach-list"></ul>
+      </div>
+    </div>`;
+}
+
+/* ---- Stage 1: submission form ---- */
+function viewSubmitForm() {
+  const d = idea.draft;
+  const revising = !!idea.returnStage;
+
+  const returnFb = revising ? (idea.decisions[idea.returnStage] || {}).feedback : "";
+  const returnBanner = revising ? `
+    <div class="callout amber" style="margin-bottom:1.2rem"><strong>Returned for detail by the ESL Lead:</strong> ${esc(returnFb || "Please add more detail before resubmitting.")}</div>`
+    : "";
+
+  return `
+  <form class="card" id="submitForm" novalidate>
+    ${returnBanner}
+    ${submissionFormGrid(d)}
     <div class="form-actions">
       <button type="button" class="btn btn-red-outline" id="saveDraftBtn">Save Draft</button>
       <div class="right">
@@ -630,42 +661,60 @@ function viewSubmitForm() {
   </form>`;
 }
 
+/* ---- ESL Lead inline edit of the submission (the "Option to edit") ---- */
+function viewEslEditForm() {
+  const d = idea.draft;
+  return `
+  <form class="card" id="eslEditForm" novalidate>
+    <div class="callout teal" style="margin-bottom:1.2rem"><strong>Editing the submission as ESL Lead.</strong> Update any details below, then save your edits. The change is recorded in the activity log.</div>
+    ${submissionFormGrid(d)}
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost" data-act="cancel-edit">Cancel</button>
+      <div class="right">
+        <button type="submit" class="btn btn-teal">Save Edits →</button>
+      </div>
+    </div>
+  </form>`;
+}
+
 /* ---- Submission confirmation ---- */
 function viewConfirm() {
   const s = idea.submission;
-  const toPl = idea.returnStage === "pl";
   const resubmit = !!idea.returnStage;
-  const nextRole = toPl ? "Project Leader" : "ESL Lead";
-  const nextLabel = toPl ? "Continue to Project Leader Decision →" : "Continue to ESL Review →";
   return `
   <div class="card hero">
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h2>${resubmit ? "Idea resubmitted" : "Idea submitted"}</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(s.title)}</strong> has been ${resubmit ? "revised and now returns" : "logged and now moves"} to the ${nextRole} for review.</p>
+    <p><strong>${esc(s.title)}</strong> has been ${resubmit ? "revised and now returns" : "logged and now moves"} to the ESL Lead for review.</p>
     <ol class="flow">
-      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>Approves the idea, escalates it to the Project Leader, returns it for more detail, or marks it non-viable with feedback.</span></div></li>
-      <li><span class="n">2</span><div class="t"><b>Escalation decision (if escalated)</b><span>The Project Leader approves the initiative, returns it for detail, or marks it non-viable.</span></div></li>
-      <li><span class="n">3</span><div class="t"><b>Execution</b><span>Once approved, the Delivery Team creates an Action Plan, delivers it, and closes out with a Post-Implementation Form.</span></div></li>
+      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>The ESL Lead may edit the submission, agree it for implementation, return it for more detail, or mark it unfeasible with feedback.</span></div></li>
+      <li><span class="n">2</span><div class="t"><b>Execution</b><span>Once agreed for implementation, the Delivery Team creates an Action Plan, delivers it, and closes out with a Post-Implementation Form.</span></div></li>
     </ol>
     <div class="hero-actions">
-      <button class="btn btn-red" data-act="continue-review">${nextLabel}</button>
+      <button class="btn btn-red" data-act="continue-review">Continue to ESL Review →</button>
     </div>
   </div>`;
 }
 
-/* ---- Stage 2: review (ESL Lead / Project Leader) ---- */
-function viewReview(who) {
-  const isEsl = who === "esl";
+/* ---- Stage 2: ESL Lead review ---- */
+function viewReview() {
   const s = idea.submission;
-  const options = isEsl
-    ? [["approve", "Approve"], ["escalate", "Escalate"], ["non-viable", "Mark Non-Viable"], ["return", "Return for Detail"]]
-    : [["approve", "Approve"], ["non-viable", "Mark Non-Viable"], ["return", "Return for Detail"]];
+  const options = [
+    ["approve", "Agreed for Implementation"],
+    ["return", "Return for Detail"],
+    ["non-viable", "Unfeasible"],
+  ];
   const optHtml = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   return `
   <div class="card">
-    <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
-    <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${idea.escalated && !isEsl ? " · escalated by the ESL Lead" : ""}</p>
+    <div class="review-head">
+      <div>
+        <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
+        <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${s.editedAt ? " · edited by ESL Lead" : ""}</p>
+      </div>
+      <button type="button" class="btn btn-teal-outline btn-sm" data-act="esl-edit">✎ Edit submission</button>
+    </div>
     <div class="summary-block">${esc(s.summary)}</div>
     <div class="kv">
       <dt>Idea title</dt><dd>${esc(s.title)}</dd>
@@ -674,17 +723,16 @@ function viewReview(who) {
       <dt>Date</dt><dd>${fmtDate(s.date)}</dd>
       <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
       <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-      <dt>Discipline</dt><dd>${esc(s.discipline) || "—"}</dd>
+      <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
       <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
-      <dt>Related FSR</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+      <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
       <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
+      <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
     </div>
   </div>
   <div class="card">
-    <h2>${isEsl ? "ESL Lead Decision" : "Project Leader Decision"}</h2>
-    <p class="sub">${isEsl
-      ? "Review the idea, choose an outcome, and add feedback. Feedback is optional when approving and required for every other outcome."
-      : "This initiative was escalated by the ESL Lead. Choose an outcome and add feedback — optional when approving, required otherwise."}</p>
+    <h2>ESL Lead Decision</h2>
+    <p class="sub">Review the idea, choose an outcome, and add feedback. Feedback is optional when agreeing for implementation and required for every other outcome. You can also edit the submission inline before deciding.</p>
     <form class="decision-form" id="decisionForm" novalidate>
       <div class="field">
         <label for="decisionOutcome">Outcome <span class="req">*</span></label>
@@ -694,8 +742,8 @@ function viewReview(who) {
         <div class="err">Please choose an outcome.</div>
       </div>
       <div class="field">
-        <label for="decisionFeedback"><span id="decisionFeedbackLabelText">Feedback</span> <span class="fb-req req">*</span><span class="fb-optional hint">(optional for Approve)</span></label>
-        <textarea id="decisionFeedback" placeholder="Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…"></textarea>
+        <label for="decisionFeedback"><span id="decisionFeedbackLabelText">Feedback</span> <span class="fb-req req">*</span><span class="fb-optional hint">(optional when agreeing)</span></label>
+        <textarea id="decisionFeedback" placeholder="Add feedback for the Delivery Team…"></textarea>
         <div class="err">Feedback is required for this outcome.</div>
       </div>
       <div class="field checkbox-field" id="field-save-future" hidden>
@@ -835,12 +883,11 @@ function viewComplete() {
 }
 
 function viewFeedback() {
-  const decider = idea.decisions.pl ? "Project Leader" : "ESL Lead";
-  const fb = (idea.decisions.pl || idea.decisions.esl).feedback;
+  const fb = idea.decisions.esl.feedback;
   return `
   <div class="card">
     <h2><span class="iid">${idea.id}</span> · ${esc(idea.submission.title)}</h2>
-    <p class="sub">This idea was marked non-viable by the ${decider}. The feedback below is for your team.</p>
+    <p class="sub">This idea was marked unfeasible by the ESL Lead. The feedback below is for your team.</p>
     <div class="callout red"><strong>Feedback:</strong> ${esc(fb)}</div>
     <div class="form-actions">
       <span style="font-size:.78rem;color:var(--muted)">${idea.savedForLater ? "Saved to the future-projects library." : "Not ready to rework right now? Save this idea for a future project."}</span>
@@ -904,6 +951,23 @@ function pc1Label(id) {
   const e = PC1_INCIDENTS.find(x => x.id === id);
   return e ? e.label : id;
 }
+/* Discipline / FSR display with the "Other" free-text spelled out */
+function disciplineDisplay(s) {
+  return s.discipline === "Other" && s.disciplineOther ? `Other — ${s.disciplineOther}` : s.discipline;
+}
+function fsrDisplay(s) {
+  return (s.fsr || []).map(f => f === "Other" && s.fsrOther ? `Other — ${s.fsrOther}` : f);
+}
+function fmtBytes(n) {
+  if (!n && n !== 0) return "";
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+function attachmentTags(atts) {
+  if (!atts || !atts.length) return "None";
+  return `<span class="tags">${atts.map(a => `<span class="tag">${esc(a.name)}${a.size != null ? ` · ${fmtBytes(a.size)}` : ""}</span>`).join("")}</span>`;
+}
 function inspectionIdFor() {
   if (!idea.inspectionId) {
     const n = parseInt((idea.id || "0").slice(-3), 10) || 1;
@@ -914,12 +978,10 @@ function inspectionIdFor() {
 
 /* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
 const STEP_INFO = {
-  submit:   { desc: "The Delivery Team submits the idea on a single form — project context, the idea itself, benefit categories, related FSR, and any linked PC1 incident.",
+  submit:   { desc: "The Delivery Team submits the idea on a single form — project context, the idea itself, benefit categories, related FSR, file attachments, and any linked PC1 incident.",
               outcomes: ["Idea is logged with an Initiative ID and moves to ESL Review."] },
-  esl:      { desc: "The ESL Lead reviews the full submission, adds feedback, and decides the outcome.",
-              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Escalate — the Project Leader makes the decision.", "Return for Detail — the Delivery Team revises and resubmits.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
-  pl:       { desc: "The Project Leader decides on the escalated initiative.",
-              outcomes: ["Approve — the Delivery Team creates an Action Plan.", "Return for Detail — the ESL Lead revises and resubmits.", "Mark Non-Viable — written feedback goes back to the Delivery Team."] },
+  esl:      { desc: "The ESL Lead reviews the full submission, can edit it inline, adds feedback, and decides the outcome.",
+              outcomes: ["Option to edit — the ESL Lead refines the submission inline; the edit is logged.", "Agreed for Implementation — the Delivery Team creates an Action Plan.", "Return for Detail — the Delivery Team revises and resubmits.", "Unfeasible — written feedback goes back to the Delivery Team."] },
   plan:     { desc: "The Delivery Team creates the Action Plan. The Inspection ID and action summary are prefilled; due date, person responsible, and comments are set by the team.",
               outcomes: ["Action Plan is delivered, then marked complete to open the Post-Implementation Form."] },
   postimpl: { desc: "The Delivery Team reviews the original submission and closes out with implementation comments, contact person, case study link, and the value delivered.",
@@ -955,14 +1017,15 @@ function viewRecap(node, state) {
         <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
         <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-        <dt>Discipline</dt><dd>${esc(s.discipline) || "—"}</dd>
+        <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
         <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
-        <dt>Related FSR</dt><dd><span class="tags">${s.fsr.map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
+        <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
+        <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
       </div>`;
-  } else if (node.key === "esl" || node.key === "pl") {
+  } else if (node.key === "esl") {
     const d = idea.decisions[node.key];
-    const outcomeText = { approved: "Approved for execution.", escalated: "Escalated to the Project Leader.", "non-viable": "Marked non-viable.", returned: "Returned to the delivery team for more detail." }[d.outcome];
+    const outcomeText = { approved: "Agreed for implementation.", "non-viable": "Marked unfeasible.", returned: "Returned to the Delivery Team for more detail." }[d.outcome];
     body = `
       <div class="callout ${d.outcome === "non-viable" ? "red" : d.outcome === "returned" ? "amber" : "teal"}"><strong>Decision:</strong> ${outcomeText}${d.feedback ? `<br><strong>Feedback:</strong> ${esc(d.feedback)}` : ""}</div>
       <p class="sub" style="margin:.7rem 0 0">Decided ${fmtDateTime(d.at)}. Comments from this stage are in the activity log below.</p>`;
@@ -1019,9 +1082,12 @@ function readDraftFromForm() {
     siteLocation: g("f-site").value, phase: g("f-phase").value,
     ideaType: (document.querySelector('input[name="ideaType"]:checked') || {}).value || "new",
     discipline: g("f-discipline").value,
+    disciplineOther: g("f-discipline-other") ? g("f-discipline-other").value : (idea.draft.disciplineOther || ""),
     title: g("f-title").value, summary: g("f-summary").value,
     benefit: [...document.querySelectorAll('[data-msel="f-benefit"] input:checked')].map(c => c.value),
     fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
+    fsrOther: g("f-fsr-other") ? g("f-fsr-other").value : (idea.draft.fsrOther || ""),
+    attachments: [...(idea.draft.attachments || [])],
     incident: g("f-incident").value,
   };
 }
@@ -1048,7 +1114,11 @@ function bindStage() {
       toast("Draft saved.");
     };
   }
+  const eslForm = document.getElementById("eslEditForm");
+  if (eslForm) eslForm.onsubmit = handleEslEditSave;
   bindMultiSelects();
+  bindOtherToggles();
+  bindAttachments();
   bindDecisionForm();
   const planForm = document.getElementById("planForm");
   if (planForm) planForm.onsubmit = handleCreatePlan;
@@ -1094,22 +1164,65 @@ function bindMultiSelects() {
   }
 }
 
+/* Reveal a free-text "please specify" field whenever "Other" is chosen, for
+   both the Discipline select and the Related FSR multiselect. */
+function bindOtherToggles() {
+  const disc = document.getElementById("f-discipline");
+  const discOther = document.getElementById("field-discipline-other");
+  if (disc && discOther) {
+    const t = () => { discOther.hidden = disc.value !== "Other"; };
+    disc.addEventListener("change", t); t();
+  }
+  const fsrMsel = $stage.querySelector('[data-msel="f-fsr"]');
+  const fsrOther = document.getElementById("field-fsr-other");
+  if (fsrMsel && fsrOther) {
+    const t = () => {
+      const picked = [...fsrMsel.querySelectorAll("input:checked")].map(c => c.value);
+      fsrOther.hidden = !picked.includes("Other");
+    };
+    fsrMsel.addEventListener("change", t); t();
+  }
+}
+
+/* File attachments on the submission form: selecting files appends their
+   metadata to the draft; each can be removed before submitting. */
+function bindAttachments() {
+  const input = document.getElementById("f-files");
+  if (!input) return;
+  input.addEventListener("change", () => {
+    idea.draft.attachments = idea.draft.attachments || [];
+    [...input.files].forEach(f => idea.draft.attachments.push({ name: f.name, size: f.size }));
+    input.value = "";
+    save();
+    renderAttachmentList();
+  });
+  renderAttachmentList();
+}
+
+function renderAttachmentList() {
+  const ul = document.getElementById("attach-list");
+  if (!ul) return;
+  const atts = idea.draft.attachments || [];
+  ul.innerHTML = atts.length
+    ? atts.map((a, i) => `<li><span class="fname">${esc(a.name)}</span><span class="fsize">${fmtBytes(a.size)}</span><button type="button" class="frm" data-rm="${i}" aria-label="Remove ${esc(a.name)}">✕</button></li>`).join("")
+    : `<li class="empty">No files attached.</li>`;
+  ul.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
+    idea.draft.attachments.splice(parseInt(b.dataset.rm, 10), 1);
+    save();
+    renderAttachmentList();
+  });
+}
+
 /* Decision form: show/hide the "required" marker on feedback as the outcome
-   changes (optional only for Approve). */
+   changes (optional only when agreeing for implementation). */
 function bindDecisionForm() {
   const df = document.getElementById("decisionForm");
   if (!df) return;
   const outcome = document.getElementById("decisionOutcome");
-  const labelText = document.getElementById("decisionFeedbackLabelText");
-  const fbField = document.getElementById("decisionFeedback");
   const saveFutureField = document.getElementById("field-save-future");
   const saveFutureBox = document.getElementById("decisionSaveForFuture");
-  const isEsl = idea.status === S.ESL;
   const sync = () => {
     df.classList.toggle("need-fb", !!outcome.value && outcome.value !== "approve");
-    const escalating = isEsl && outcome.value === "escalate";
-    labelText.textContent = escalating ? "Notes for Project Leader" : "Feedback";
-    fbField.placeholder = escalating ? "Add notes for the Project Leader…" : `Add feedback for the ${isEsl ? "Delivery Team" : "ESL Lead"}…`;
     const nonViable = outcome.value === "non-viable";
     saveFutureField.hidden = !nonViable;
     if (!nonViable) saveFutureBox.checked = false;
@@ -1118,32 +1231,65 @@ function bindDecisionForm() {
   sync();
 }
 
-function handleSubmitIdea(e) {
-  e.preventDefault();
-  readDraftFromForm();
+/* Validate the submission field grid (shared by submit & ESL inline edit).
+   Marks invalid fields and returns true if anything is missing. */
+function validateSubmissionForm() {
   const g = id => document.getElementById(id);
   const d = idea.draft;
   let bad = false;
   bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
   bad = markInvalid(g("f-phase"), !d.phase) || bad;
   bad = markInvalid(g("f-discipline"), !d.discipline) || bad;
+  if (d.discipline === "Other" && g("f-discipline-other")) {
+    bad = markInvalid(g("f-discipline-other"), !(d.disciplineOther || "").trim()) || bad;
+  }
   bad = markInvalid(g("f-title"), !d.title.trim()) || bad;
   bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
   document.getElementById("field-benefit").classList.toggle("invalid", d.benefit.length === 0);
   document.getElementById("field-fsr").classList.toggle("invalid", d.fsr.length === 0);
   bad = bad || d.benefit.length === 0 || d.fsr.length === 0;
-  if (bad) { toast("Please complete the required fields."); return; }
+  if (d.fsr.includes("Other") && g("f-fsr-other")) {
+    bad = markInvalid(g("f-fsr-other"), !(d.fsrOther || "").trim()) || bad;
+  }
+  return bad;
+}
 
+function handleSubmitIdea(e) {
+  e.preventDefault();
+  readDraftFromForm();
+  if (validateSubmissionForm()) { toast("Please complete the required fields."); return; }
+  const d = idea.draft;
   const revising = !!idea.returnStage;
   if (!idea.id) idea.id = nextInitiativeId();
   idea.submission = Object.assign({}, d, {
     project: d.project.trim(), submitter: d.submitter.trim(),
     siteLocation: d.siteLocation.trim(), title: d.title.trim(), summary: d.summary.trim(),
+    disciplineOther: (d.disciplineOther || "").trim(), fsrOther: (d.fsrOther || "").trim(),
+    attachments: [...(d.attachments || [])],
     submittedAt: nowISO(),
   });
   idea.status = S.CONFIRM;
   addLog("sys", revising ? "Idea revised and resubmitted." : "Idea submitted.");
   save(); render();
+}
+
+/* ESL Lead saves inline edits back onto the frozen submission. */
+function handleEslEditSave(e) {
+  e.preventDefault();
+  readDraftFromForm();
+  if (validateSubmissionForm()) { toast("Please complete the required fields."); return; }
+  const d = idea.draft;
+  idea.submission = Object.assign({}, idea.submission, {
+    siteLocation: d.siteLocation.trim(), phase: d.phase, ideaType: d.ideaType,
+    discipline: d.discipline, disciplineOther: (d.disciplineOther || "").trim(),
+    title: d.title.trim(), summary: d.summary.trim(),
+    benefit: [...d.benefit], fsr: [...d.fsr], fsrOther: (d.fsrOther || "").trim(),
+    incident: d.incident, attachments: [...(d.attachments || [])],
+    editedAt: nowISO(),
+  });
+  eslEditing = false;
+  addLog("sys", "ESL Lead edited the submission.");
+  save(); render(); toast("Submission updated.");
 }
 
 function handleCreatePlan(e) {
@@ -1194,58 +1340,62 @@ function draftFromSubmission() {
   const s = idea.submission;
   return {
     project: s.project, submitter: s.submitter, date: s.date,
-    siteLocation: s.siteLocation, phase: s.phase, discipline: s.discipline,
+    siteLocation: s.siteLocation, phase: s.phase, ideaType: s.ideaType || "new",
+    discipline: s.discipline, disciplineOther: s.disciplineOther || "",
     title: s.title, summary: s.summary,
-    benefit: [...(s.benefit || [])], fsr: [...(s.fsr || [])], incident: s.incident,
+    benefit: [...(s.benefit || [])], fsr: [...(s.fsr || [])], fsrOther: s.fsrOther || "",
+    attachments: [...(s.attachments || [])], incident: s.incident,
   };
 }
 
-/* Commit a reviewer decision. `stage` is "esl" or "pl". */
+/* Commit the ESL Lead's decision. `stage` is always "esl". */
 function submitDecision(stage, outcome, fb, saveForFuture) {
+  eslEditing = false;
   if (fb) addLog("comment", fb);
   switch (outcome) {
     case "approve":
       idea.decisions[stage] = { outcome: "approved", feedback: fb || undefined, at: nowISO() };
-      addLog("sys", "Approved. Delivery Team to create Action Plan.");
+      addLog("sys", "Agreed for implementation. Delivery Team to create Action Plan.");
       idea.status = S.PLAN;
-      save(); render(); toast("Approved — over to the Delivery Team.");
-      break;
-    case "escalate":
-      idea.decisions.esl = { outcome: "escalated", feedback: fb, at: nowISO() };
-      idea.escalated = true;
-      addLog("sys", "Escalated to Project Leader.");
-      idea.status = S.PL;
-      save(); render(); toast("Escalated to the Project Leader.");
+      save(); render(); toast("Agreed for implementation — over to the Delivery Team.");
       break;
     case "non-viable":
       idea.decisions[stage] = { outcome: "non-viable", feedback: fb, at: nowISO() };
-      addLog("sys", "Marked Non-Viable. Feedback provided for Delivery Team.");
+      addLog("sys", "Marked Unfeasible. Feedback provided for Delivery Team.");
       idea.status = S.FEEDBACK;
       if (saveForFuture) saveProjectForLater({ silent: true });
       save(); render();
-      toast(saveForFuture ? "Marked non-viable — feedback sent and saved for future projects." : "Marked non-viable — feedback sent to the Delivery Team.");
+      toast(saveForFuture ? "Marked unfeasible — feedback sent and saved for future projects." : "Marked unfeasible — feedback sent to the Delivery Team.");
       break;
     case "return": {
       idea.decisions[stage] = { outcome: "returned", feedback: fb, at: nowISO() };
-      const to = stage === "pl" ? "ESL Lead" : "Delivery Team";
-      addLog("sys", `Returned for detail to the ${to}.`);
+      addLog("sys", "Returned for detail to the Delivery Team.");
       idea.returnStage = stage;
       idea.draft = draftFromSubmission();
       idea.status = S.DRAFT;
-      save(); render(); toast(`Returned to the ${to} for more detail.`);
+      save(); render(); toast("Returned to the Delivery Team for more detail.");
       break;
     }
   }
 }
 
 function handleAction(act) {
-  const stageKey = idea.status === S.ESL ? "esl" : "pl";
+  const stageKey = "esl";
   switch (act) {
     case "back": peek = null; render(); break;
     case "continue-review":
-      idea.status = idea.returnStage === "pl" ? S.PL : S.ESL;
+      idea.status = S.ESL;
       idea.returnStage = null;
       save(); render();
+      break;
+    case "esl-edit":
+      idea.draft = draftFromSubmission();
+      eslEditing = true;
+      render();
+      break;
+    case "cancel-edit":
+      eslEditing = false;
+      render();
       break;
     case "add-comment": {
       const ta = document.getElementById("newComment");
@@ -1283,6 +1433,7 @@ function handleAction(act) {
     case "restart":
       idea = freshIdea();
       peek = null;
+      eslEditing = false;
       save(); render();
       toast("New idea started.");
       break;
@@ -1298,6 +1449,7 @@ function handleAction(act) {
 document.getElementById("resetBtn").onclick = () => {
   idea = freshIdea();
   peek = null;
+  eslEditing = false;
   save(); render();
   toast("Workflow reset.");
 };
