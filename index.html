@@ -164,6 +164,12 @@
   .kv dd{min-width:0;overflow-wrap:anywhere}
   .tags{display:flex;flex-wrap:wrap;gap:.35rem}
   .tag{background:var(--soft);border:1px solid var(--line);border-radius:5px;font-size:.75rem;font-weight:600;padding:.1rem .5rem;color:var(--label)}
+  .pill{display:inline-flex;align-items:center;gap:.35rem;border-radius:999px;font-size:.75rem;font-weight:700;padding:.15rem .65rem;vertical-align:middle}
+  .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .pill.teal{background:var(--teal-soft);color:var(--teal-dark)}
+  .pill.amber{background:var(--amber-soft);color:var(--amber)}
+  .pill.green{background:var(--green-soft);color:var(--green)}
+  .pill.red{background:var(--red-soft);color:var(--red-dark)}
   .summary-block{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;font-size:.9rem;white-space:pre-wrap;margin-bottom:1rem}
   .iid{font-size:.8rem;font-weight:700;color:var(--teal-dark);letter-spacing:.05em}
 
@@ -175,10 +181,7 @@
   .reveal{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:1rem}
   .reveal h3{font-size:.88rem;margin-bottom:.6rem}
   .decision-form{display:flex;flex-direction:column;gap:1.05rem;margin-top:.4rem}
-  .decision-form .fb-req{color:var(--red);display:none}
-  .decision-form.need-fb .fb-req{display:inline}
-  .decision-form .fb-optional{color:var(--muted);font-weight:500}
-  .decision-form.need-fb .fb-optional{display:none}
+  .decision-form[hidden]{display:none}
 
   /* ---------- Comments ---------- */
   .clog{list-style:none;display:flex;flex-direction:column;gap:.7rem;max-height:300px;overflow-y:auto}
@@ -288,23 +291,37 @@ const PC1_INCIDENTS = [
   { id: "EVT-2026-0155", label: "EVT-2026-0155 · Worker in exclusion zone during reversing" },
 ];
 
-/* Statuses (one idea moves through these) */
+/* Idea status — set on the submission form and updated by either role while
+   the idea is tracked. The status is what drives the workflow. */
+const IDENTIFIED = "Identified";
+const IN_PROGRESS = "In Progress";
+const NOT_FEASIBLE = "Not Feasible";
+const IMPLEMENTED = "Implemented";
+const IDEA_STATUSES = [IDENTIFIED, IN_PROGRESS, NOT_FEASIBLE, IMPLEMENTED];
+
+const STATUS_NOTE = {
+  [IDENTIFIED]: "Logged and being tracked — no work started yet.",
+  [IN_PROGRESS]: "Work is underway. Add an Action Plan if the team wants one.",
+  [NOT_FEASIBLE]: "Closes the idea out with feedback for the Delivery Team.",
+  [IMPLEMENTED]: "Opens the Post-Implementation Form to close the idea out.",
+};
+
+/* Workflow stages (one idea moves through these) */
 const S = {
   DRAFT: "draft",           // Delivery Team filling the form
   CONFIRM: "confirm",       // submission confirmation screen
   ESL: "review-esl",        // ESL Lead review
-  PLAN: "plan",             // Delivery Team creates Action Plan
-  EXECUTION: "execution",   // Action Plan in progress
+  TRACK: "tracking",        // idea is tracked; status drives what happens next
   POST: "post-impl",        // Post-Implementation Form
   COMPLETE: "complete",
-  FEEDBACK: "feedback",     // non-viable, Delivery Team receives feedback
+  FEEDBACK: "feedback",     // not feasible, Delivery Team receives feedback
   CLOSED: "closed",         // feedback acknowledged
 };
 
 const ROLE_FOR_STATUS = {
   [S.DRAFT]: "Delivery Team", [S.CONFIRM]: "Delivery Team",
   [S.ESL]: "ESL Lead",
-  [S.PLAN]: "Delivery Team", [S.EXECUTION]: "Delivery Team",
+  [S.TRACK]: "Delivery Team",
   [S.POST]: "Delivery Team", [S.COMPLETE]: "Delivery Team",
   [S.FEEDBACK]: "Delivery Team", [S.CLOSED]: "Delivery Team",
 };
@@ -312,7 +329,7 @@ const ROLE_FOR_STATUS = {
 const TITLE_FOR_STATUS = {
   [S.DRAFT]: "Submit a Safety Idea", [S.CONFIRM]: "Idea Submitted",
   [S.ESL]: "ESL Lead Review",
-  [S.PLAN]: "Create Action Plan", [S.EXECUTION]: "Action Plan in Progress",
+  [S.TRACK]: "Track Safety Idea",
   [S.POST]: "Post-Implementation Form", [S.COMPLETE]: "Initiative Complete",
   [S.FEEDBACK]: "Reviewer Feedback", [S.CLOSED]: "Initiative Closed",
 };
@@ -320,21 +337,26 @@ const TITLE_FOR_STATUS = {
 /* =============================================================
    State & persistence
 ============================================================= */
-const KEY = "es-flow-v2";
+const KEY = "es-flow-v3";
 let idea = null;
 let peek = null; // key of a tracker step being viewed (recap/preview), or null
 let eslEditing = false; // true while the ESL Lead is editing the submission inline
+let eslReturning = false; // true while the ESL Lead is writing a "return for detail" note
+let planEditing = false; // true while the optional Action Plan form is open
 
 function freshIdea() {
   return {
     status: S.DRAFT,
     id: null,
     returnStage: null,     // "esl" while a returned idea is being revised & resubmitted
+    eslSeen: false,        // true once the ESL Lead has marked the idea as seen
+    notFeasible: null,     // {reason, by, role, atKey, at} once marked Not Feasible
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
       siteLocation: "FBA North", phase: "Construction", ideaType: "new", discipline: "Structural",
       disciplineOther: "",
+      status: IDENTIFIED,
       title: "Use of precast viaduct structures constructed at ground level.",
       summary: "Maximising the use of precast concrete bridge piers and modular spans, which are assembled off-site and craned into place during scheduled short-term network closures. Drastically reduces high-risk construction hours over water, mitigates environmental spill risks, and significantly limits disruption to critical transport arteries.",
       benefit: ["Acute Safety", "Delivery Efficiency & Constructability"],
@@ -344,8 +366,9 @@ function freshIdea() {
       incident: "",
     },
     submission: null,      // frozen copy on submit
-    decisions: {},         // esl: {outcome, feedback?, at}, pl: {...}
-    actionPlan: null,
+    decisions: {},         // esl: {outcome: "seen"|"returned", feedback?, at}
+    actionPlan: null,      // optional — added from the tracking screen
+    statusHistory: [],     // {from, to, by, role, at}
     postImpl: null,
     log: [],
     savedForLater: false,  // true once a non-viable idea has been saved to the future-projects library
@@ -375,7 +398,7 @@ function loadSavedProjects() {
 function saveProjectForLater(opts) {
   if (idea.savedForLater) return;
   const s = idea.submission;
-  const d = idea.decisions.esl;
+  const nf = idea.notFeasible;
   const list = loadSavedProjects();
   list.push({
     id: idea.id,
@@ -385,8 +408,8 @@ function saveProjectForLater(opts) {
     discipline: s.discipline,
     benefit: s.benefit,
     fsr: s.fsr,
-    decidedBy: "ESL Lead",
-    feedback: d ? d.feedback : "",
+    decidedBy: nf ? nf.role : "",
+    feedback: nf ? nf.reason : "",
     savedAt: nowISO(),
   });
   try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch (e) {}
@@ -431,16 +454,19 @@ function toast(msg) {
    Workflow path model — drives the clickable tracker
 ============================================================= */
 function buildPath() {
-  const nonViable = [S.FEEDBACK, S.CLOSED].includes(idea.status);
+  const nf = idea.notFeasible;
   const nodes = [
     { key: "submit", name: "Submit Idea", role: "Delivery Team" },
     { key: "esl", name: "ESL Review", role: "ESL Lead" },
   ];
-  if (nonViable) {
+  if (nf) {
+    /* An idea can be marked Not Feasible at ESL review or while being tracked;
+       only show the tracking node when it actually got that far. */
+    if (nf.atKey !== "esl") nodes.push({ key: "track", name: "Tracking", role: "Delivery Team" });
     nodes.push({ key: "feedback", name: "Receive Feedback", role: "Delivery Team" });
   } else {
     nodes.push(
-      { key: "plan", name: "Action Plan", role: "Delivery Team" },
+      { key: "track", name: "Tracking", role: "Delivery Team" },
       { key: "postimpl", name: "Post-Implementation", role: "Delivery Team" },
       { key: "done", name: "Complete", role: "Delivery Team" },
     );
@@ -452,7 +478,7 @@ function currentKey() {
   switch (idea.status) {
     case S.DRAFT: case S.CONFIRM: return "submit";
     case S.ESL: return "esl";
-    case S.PLAN: case S.EXECUTION: return "plan";
+    case S.TRACK: return "track";
     case S.POST: return "postimpl";
     case S.COMPLETE: return "done";
     case S.FEEDBACK: case S.CLOSED: return "feedback";
@@ -464,11 +490,104 @@ function nodeStates(nodes) {
   const cur = nodes.findIndex(n => n.key === currentKey());
   const terminal = [S.COMPLETE, S.CLOSED].includes(idea.status);
   return nodes.map((n, i) => {
-    if (n.key === "esl" && idea.decisions.esl?.outcome === "non-viable") return "dead";
+    if (idea.notFeasible && n.key === idea.notFeasible.atKey) return "dead";
     if (i < cur) return "done";
     if (i === cur) return terminal ? "done" : "now";
     return "next";
   });
+}
+
+/* =============================================================
+   Idea status — the tracker's source of truth
+============================================================= */
+function ideaStatus() {
+  return (idea.submission ? idea.submission.status : idea.draft.status) || IDENTIFIED;
+}
+
+/* Where an idea sits given its status, once the ESL Lead has seen it. */
+function stageForStatus(status) {
+  if (status === IMPLEMENTED) return idea.postImpl ? S.COMPLETE : S.POST;
+  if (status === NOT_FEASIBLE) return S.FEEDBACK;
+  return S.TRACK;
+}
+
+/* Apply a status change and move the idea to wherever that status belongs.
+   `reason` is required when moving to Not Feasible. */
+function applyStatus(next, reason, saveForFuture) {
+  const prev = ideaStatus();
+  if (idea.submission) idea.submission.status = next;
+  idea.draft.status = next;
+
+  if (next !== prev) {
+    idea.statusHistory.push({ from: prev, to: next, by: actorName(), role: currentRole(), at: nowISO() });
+    addLog("sys", `Status changed from ${prev} to ${next}.`);
+  }
+
+  if (next === NOT_FEASIBLE) {
+    idea.notFeasible = { reason: reason || "", by: actorName(), role: currentRole(), atKey: currentKey(), at: nowISO() };
+    if (saveForFuture) saveProjectForLater({ silent: true });
+  } else if (idea.notFeasible) {
+    idea.notFeasible = null;   /* re-opened from Not Feasible */
+  }
+
+  /* The ESL Lead's acknowledgement still gates the idea: until it's marked as
+     seen, a status change is recorded but the idea stays in review. */
+  idea.status = idea.eslSeen ? stageForStatus(next) : S.ESL;
+  save(); render();
+}
+
+function statusPill(status) {
+  const cls = { [IDENTIFIED]: "teal", [IN_PROGRESS]: "amber", [NOT_FEASIBLE]: "red", [IMPLEMENTED]: "green" }[status] || "teal";
+  return `<span class="pill ${cls}">${esc(status)}</span>`;
+}
+
+/* Status control shown on the ESL review, tracking and post-implementation
+   screens — either role can update the status from wherever they are. */
+function statusCard() {
+  const cur = ideaStatus();
+  const opts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
+  return `
+  <div class="card">
+    <div class="review-head">
+      <div>
+        <h2>Idea Status</h2>
+        <p class="sub">Current status ${statusPill(cur)} · updating as ${esc(currentRole())}</p>
+      </div>
+    </div>
+    <form class="decision-form" id="statusForm" novalidate>
+      <div class="field">
+        <label for="statusSelect">Status <span class="req">*</span></label>
+        <select id="statusSelect" style="max-width:320px">${opts}</select>
+        <div class="help" id="statusNote">${esc(STATUS_NOTE[cur])}</div>
+      </div>
+      <div class="field" id="field-status-reason" hidden>
+        <label for="statusReason">Why is this not feasible? <span class="req">*</span></label>
+        <textarea id="statusReason" placeholder="Feedback for the Delivery Team…">${esc(idea.notFeasible ? idea.notFeasible.reason : "")}</textarea>
+        <div class="err">A reason is required when marking an idea Not Feasible.</div>
+      </div>
+      <div class="field checkbox-field" id="field-save-future" hidden>
+        <label for="statusSaveForFuture">
+          <input type="checkbox" id="statusSaveForFuture" ${idea.savedForLater ? "checked disabled" : ""}>
+          Save this idea for future projects
+        </label>
+      </div>
+      <div class="form-actions" style="margin-top:0;border-top:none;padding-top:0">
+        <span></span>
+        <div class="right"><button type="submit" class="btn btn-red" data-act="update-status">Update Status →</button></div>
+      </div>
+    </form>
+    ${statusHistoryHtml()}
+  </div>`;
+}
+
+function statusHistoryHtml() {
+  if (!idea.statusHistory.length) return "";
+  return `
+    <div style="margin-top:1.1rem;padding-top:.9rem;border-top:1px solid var(--line)">
+      <p class="sub" style="margin-bottom:.5rem">Status history</p>
+      <ul class="clog">${idea.statusHistory.map(h => `
+        <li><div class="who">${esc(h.from)} → ${esc(h.to)} <span class="r">· ${esc(h.by)} · ${esc(h.role)} · ${fmtDateTime(h.at)}</span></div></li>`).join("")}</ul>
+    </div>`;
 }
 
 /* =============================================================
@@ -531,8 +650,7 @@ function viewStage() {
     case S.DRAFT: return viewSubmitForm();
     case S.CONFIRM: return viewConfirm();
     case S.ESL: return eslEditing ? viewEslEditForm() : viewReview();
-    case S.PLAN: return viewPlanForm();
-    case S.EXECUTION: return viewExecution();
+    case S.TRACK: return viewTracking();
     case S.POST: return viewPostForm();
     case S.COMPLETE: return viewComplete();
     case S.FEEDBACK: return viewFeedback();
@@ -564,9 +682,20 @@ function submissionFormGrid(d) {
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
   const disciplineOpts = DISCIPLINES.map(p => `<option ${d.discipline === p ? "selected" : ""}>${esc(p)}</option>`).join("");
   const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
+  const statusOpts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${d.status === s ? "selected" : ""}>${esc(s)}</option>`).join("");
 
   return `
     <div class="form-grid">
+      <div class="field full">
+        <label for="f-status">Status <span class="req">*</span></label>
+        <select id="f-status" style="max-width:320px">${statusOpts}</select>
+        <div class="help" id="f-status-note">${esc(STATUS_NOTE[d.status] || STATUS_NOTE[IDENTIFIED])}</div>
+      </div>
+      <div class="field full" id="field-status-reason-form" ${d.status === NOT_FEASIBLE ? "" : "hidden"}>
+        <label for="f-status-reason">Why is this not feasible? <span class="req">*</span></label>
+        <input type="text" id="f-status-reason" placeholder="Brief reason" value="${esc(d.statusReason || "")}">
+        <div class="err">Please give a reason.</div>
+      </div>
       <div class="field">
         <label for="f-site">Site Location <span class="req">*</span></label>
         <input type="text" id="f-site" placeholder="e.g. North Pylon Pier 3" value="${esc(d.siteLocation)}">
@@ -686,10 +815,11 @@ function viewConfirm() {
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h2>${resubmit ? "Idea resubmitted" : "Idea submitted"}</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(s.title)}</strong> has been ${resubmit ? "revised and now returns" : "logged and now moves"} to the ESL Lead for review.</p>
+    <p><strong>${esc(s.title)}</strong> has been ${resubmit ? "revised and now returns" : "logged as"} ${resubmit ? "" : statusPill(s.status)} ${resubmit ? "" : "and moves"} to the ESL Lead for review.</p>
     <ol class="flow">
-      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>The ESL Lead may edit the submission, agree it for implementation, return it for more detail, or mark it unfeasible with feedback.</span></div></li>
-      <li><span class="n">2</span><div class="t"><b>Execution</b><span>Once agreed for implementation, the Delivery Team creates an Action Plan, delivers it, and closes out with a Post-Implementation Form.</span></div></li>
+      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>The ESL Lead may edit the submission, then either mark it as seen or return it for more detail.</span></div></li>
+      <li><span class="n">2</span><div class="t"><b>Tracking</b><span>The idea is tracked by its status. Either role can move it between Identified, In Progress, Not Feasible and Implemented, and add an Action Plan if the team wants one.</span></div></li>
+      <li><span class="n">3</span><div class="t"><b>Close-out</b><span>Setting the status to Implemented opens the Post-Implementation Form; Not Feasible closes the idea with feedback.</span></div></li>
     </ol>
     <div class="hero-actions">
       <button class="btn btn-red" data-act="continue-review">Continue to ESL Review →</button>
@@ -700,24 +830,19 @@ function viewConfirm() {
 /* ---- Stage 2: ESL Lead review ---- */
 function viewReview() {
   const s = idea.submission;
-  const options = [
-    ["approve", "Agreed for Implementation"],
-    ["return", "Return for Detail"],
-    ["non-viable", "Unfeasible"],
-  ];
-  const optHtml = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   return `
   <div class="card">
     <div class="review-head">
       <div>
         <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
-        <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${s.editedAt ? " · edited by ESL Lead" : ""}</p>
+        <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${s.editedAt ? " · edited by ESL Lead" : ""} · ${statusPill(s.status)}</p>
       </div>
       <button type="button" class="btn btn-teal-outline btn-sm" data-act="esl-edit">✎ Edit submission</button>
     </div>
     <div class="summary-block">${esc(s.summary)}</div>
     <div class="kv">
       <dt>Idea title</dt><dd>${esc(s.title)}</dd>
+      <dt>Status</dt><dd>${statusPill(s.status)}</dd>
       <dt>Project</dt><dd>${esc(s.project)}</dd>
       <dt>Submitted by</dt><dd>${esc(s.submitter)}</dd>
       <dt>Date</dt><dd>${fmtDate(s.date)}</dd>
@@ -731,43 +856,88 @@ function viewReview() {
     </div>
   </div>
   <div class="card">
-    <h2>ESL Lead Decision</h2>
-    <p class="sub">Review the idea, choose an outcome, and add feedback. Feedback is optional when agreeing for implementation and required for every other outcome. You can also edit the submission inline before deciding.</p>
-    <form class="decision-form" id="decisionForm" novalidate>
-      <div class="field">
-        <label for="decisionOutcome">Outcome <span class="req">*</span></label>
-        <select id="decisionOutcome">
-          <option value="" selected>Select an outcome…</option>${optHtml}
-        </select>
-        <div class="err">Please choose an outcome.</div>
+    <h2>ESL Lead Review</h2>
+    <p class="sub">The ESL Lead does not decide the outcome — acknowledge the idea so the team can get on with tracking it, or send it back if there isn't enough detail. You can also edit the submission inline first.</p>
+    <div class="decisions">
+      <div class="decision">
+        <button class="btn btn-teal" data-act="mark-seen">Mark as Seen</button>
+        <p>Acknowledges the idea. It moves to tracking, where either role updates its status.</p>
       </div>
-      <div class="field">
-        <label for="decisionFeedback"><span id="decisionFeedbackLabelText">Feedback</span> <span class="fb-req req">*</span><span class="fb-optional hint">(optional when agreeing)</span></label>
-        <textarea id="decisionFeedback" placeholder="Add feedback for the Delivery Team…"></textarea>
-        <div class="err">Feedback is required for this outcome.</div>
+      <div class="decision">
+        <button class="btn btn-red-outline" data-act="show-return">Return for Detail</button>
+        <p>Sends the idea back to the Delivery Team to be revised and resubmitted. A note is required.</p>
       </div>
-      <div class="field checkbox-field" id="field-save-future" hidden>
-        <label for="decisionSaveForFuture">
-          <input type="checkbox" id="decisionSaveForFuture">
-          Save this idea for future projects
-        </label>
+    </div>
+    <form class="decision-form" id="returnForm" novalidate ${eslReturning ? "" : "hidden"} style="margin-top:1rem">
+      <div class="field">
+        <label for="returnFeedback">What extra detail is needed? <span class="req">*</span></label>
+        <textarea id="returnFeedback" placeholder="Tell the Delivery Team what to add…"></textarea>
+        <div class="err">Please say what detail is missing.</div>
       </div>
       <div class="form-actions" style="margin-top:0;border-top:none;padding-top:0">
-        <span></span>
-        <div class="right"><button type="submit" class="btn btn-red" data-act="submit-decision">Submit Decision →</button></div>
+        <button type="button" class="btn btn-ghost" data-act="cancel-return">Cancel</button>
+        <div class="right"><button type="submit" class="btn btn-red" data-act="submit-return">Return for Detail →</button></div>
       </div>
     </form>
   </div>
+  ${statusCard()}
   ${commentsCard()}`;
 }
 
-/* ---- Stage 3a: action plan ---- */
-function viewPlanForm() {
+/* ---- Stage 3: tracking — status-driven, Action Plan optional ---- */
+function viewTracking() {
   return `
-  ${originalCard("Approved for execution — build the Action Plan below.")}
+  ${originalCard("Seen by the ESL Lead. Track the idea by updating its status; add an Action Plan if the team wants one.")}
+  ${statusCard()}
+  ${actionPlanCard()}
+  ${commentsCard()}`;
+}
+
+/* The Action Plan is optional from here on — it can be added, edited and
+   marked complete without ever blocking the idea's status. */
+function actionPlanCard() {
+  const ap = idea.actionPlan;
+  if (planEditing) return actionPlanForm();
+  if (!ap) {
+    return `
+    <div class="card">
+      <div class="review-head">
+        <div>
+          <h2>Action Plan <span class="hint" style="font-weight:500;color:var(--muted);font-size:.8rem">(optional)</span></h2>
+          <p class="sub" style="margin:0">No Action Plan on this idea. Add one if the work needs an owner and a due date.</p>
+        </div>
+        <button class="btn btn-teal-outline btn-sm" data-act="add-plan">＋ Add Action Plan</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="card">
+    <div class="review-head">
+      <div>
+        <h2>Action Plan <span class="iid" style="margin-left:.4rem">${esc(ap.inspectionId)}</span></h2>
+        <p class="sub" style="margin:0">Added ${fmtDate(ap.createdAt)}${ap.completedAt ? ` · completed ${fmtDate(ap.completedAt)}` : ""}</p>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-teal-outline btn-sm" data-act="add-plan">✎ Edit</button>
+        ${ap.completedAt ? "" : `<button class="btn btn-teal btn-sm" data-act="complete-plan">Mark Action Plan Complete</button>`}
+      </div>
+    </div>
+    <div class="kv" style="margin-top:.9rem">
+      <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>
+      <dt>Due date</dt><dd>${fmtDate(ap.dueDate)}</dd>
+      <dt>Person responsible</dt><dd>${esc(ap.personResponsible)}</dd>
+      <dt>Comments</dt><dd>${esc(ap.comments || "—")}</dd>
+      <dt>Status</dt><dd>${ap.completedAt ? "Complete" : "In progress"}</dd>
+    </div>
+  </div>`;
+}
+
+function actionPlanForm() {
+  const ap = idea.actionPlan || {};
+  return `
   <form class="card" id="planForm" novalidate>
-    <h2>Action Plan</h2>
-    <p class="sub">Inspection ID and action summary are prefilled from the approved initiative — set the delivery details.</p>
+    <h2>${idea.actionPlan ? "Edit Action Plan" : "Add Action Plan"} <span class="hint" style="font-weight:500;color:var(--muted);font-size:.8rem">(optional)</span></h2>
+    <p class="sub">Inspection ID and action summary are prefilled — set the delivery details.</p>
     <div class="form-grid">
       <div class="field">
         <label for="ap-insp">Related Inspection ID <span class="hint">(prefilled)</span></label>
@@ -775,60 +945,39 @@ function viewPlanForm() {
       </div>
       <div class="field">
         <label for="ap-due">Due Date <span class="req">*</span></label>
-        <input type="date" id="ap-due" min="${new Date().toISOString().slice(0, 10)}">
+        <input type="date" id="ap-due" value="${esc(ap.dueDate || "")}">
         <div class="err">Please set a due date.</div>
       </div>
       <div class="field full">
         <label for="ap-summary">Action Required Summary <span class="hint">(prefilled, editable)</span></label>
-        <textarea id="ap-summary">Implement approved initiative: ${esc(idea.submission.summary)}</textarea>
+        <textarea id="ap-summary">${esc(ap.actionSummary || `Implement: ${idea.submission.summary}`)}</textarea>
       </div>
       <div class="field">
         <label for="ap-person">Person Responsible <span class="req">*</span></label>
-        <input type="text" id="ap-person" placeholder="Name of the owner">
+        <input type="text" id="ap-person" placeholder="Name of the owner" value="${esc(ap.personResponsible || "")}">
         <div class="err">Please name the person responsible.</div>
       </div>
       <div class="field">
         <label for="ap-comments">Comments <span class="hint">(optional)</span></label>
-        <input type="text" id="ap-comments" placeholder="Delivery notes, phasing, dependencies…">
+        <input type="text" id="ap-comments" placeholder="Delivery notes, phasing, dependencies…" value="${esc(ap.comments || "")}">
       </div>
     </div>
     <div class="form-actions">
-      <span></span>
-      <div class="right"><button type="submit" class="btn btn-red">Create Action Plan →</button></div>
+      <button type="button" class="btn btn-ghost" data-act="cancel-plan">Cancel</button>
+      <div class="right"><button type="submit" class="btn btn-red">${idea.actionPlan ? "Save Action Plan →" : "Add Action Plan →"}</button></div>
     </div>
-  </form>
-  ${commentsCard()}`;
+  </form>`;
 }
 
-function viewExecution() {
+/* ---- Stage 4: post-implementation, opened by status = Implemented ---- */
+function viewPostForm() {
   const ap = idea.actionPlan;
   return `
-  <div class="card">
-    <h2>Action Plan <span class="iid" style="margin-left:.4rem">${esc(ap.inspectionId)}</span></h2>
-    <p class="sub">Created ${fmtDate(ap.createdAt)} · the Delivery Team marks it complete when the work is done.</p>
-    <div class="kv">
-      <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>
-      <dt>Due date</dt><dd>${fmtDate(ap.dueDate)}</dd>
-      <dt>Person responsible</dt><dd>${esc(ap.personResponsible)}</dd>
-      <dt>Comments</dt><dd>${esc(ap.comments || "—")}</dd>
-    </div>
-    <div class="form-actions">
-      <span></span>
-      <div class="right"><button class="btn btn-red" data-act="mark-complete">Mark Complete →</button></div>
-    </div>
-    <p style="font-size:.78rem;color:var(--muted);margin-top:.5rem">Marking complete opens the Post-Implementation Form to close out the initiative.</p>
-  </div>
-  ${commentsCard()}`;
-}
-
-/* ---- Stage 3b: post-implementation ---- */
-function viewPostForm() {
-  const s = idea.submission;
-  return `
-  ${originalCard("Review the original submission, then record the outcome to close out this initiative.")}
+  ${originalCard("Marked Implemented — record the outcome to close this idea out.")}
+  ${statusCard()}
   <form class="card" id="pifForm" novalidate>
     <h2>Post-Implementation Form</h2>
-    <p class="sub">Action Plan ${esc(idea.actionPlan.inspectionId)} marked complete ${fmtDate(idea.actionPlan.completedAt)}.</p>
+    <p class="sub">${ap ? `Action Plan ${esc(ap.inspectionId)}${ap.completedAt ? ` marked complete ${fmtDate(ap.completedAt)}` : " is on this idea"}.` : "No Action Plan was raised for this idea."}</p>
     <div class="form-grid">
       <div class="field full">
         <label for="pif-comments">Implementation Comments <span class="req">*</span></label>
@@ -864,7 +1013,7 @@ function viewComplete() {
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h2>Initiative complete</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(idea.submission.title)}</strong> has been delivered and closed out. The post-implementation review is on record.</p>
+    <p><strong>${esc(idea.submission.title)}</strong> is ${statusPill(IMPLEMENTED)} and closed out. The post-implementation review is on record.</p>
   </div>
   <div class="card">
     <h2>Post-Implementation Review</h2>
@@ -883,12 +1032,13 @@ function viewComplete() {
 }
 
 function viewFeedback() {
-  const fb = idea.decisions.esl.feedback;
+  const nf = idea.notFeasible || {};
   return `
   <div class="card">
     <h2><span class="iid">${idea.id}</span> · ${esc(idea.submission.title)}</h2>
-    <p class="sub">This idea was marked unfeasible by the ESL Lead. The feedback below is for your team.</p>
-    <div class="callout red"><strong>Feedback:</strong> ${esc(fb)}</div>
+    <p class="sub">This idea was marked ${statusPill(NOT_FEASIBLE)} by the ${esc(nf.role || "ESL Lead")} on ${fmtDate(nf.at)}. The feedback below is for your team.</p>
+    <div class="callout red"><strong>Feedback:</strong> ${esc(nf.reason || "No reason recorded.")}</div>
+    <div style="margin-top:1rem">${statusHistoryHtml()}</div>
     <div class="form-actions">
       <span style="font-size:.78rem;color:var(--muted)">${idea.savedForLater ? "Saved to the future-projects library." : "Not ready to rework right now? Save this idea for a future project."}</span>
       <div class="right">
@@ -904,9 +1054,9 @@ function viewClosed() {
   return `
   <div class="card hero">
     <div class="mark bad"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></div>
-    <h2>Initiative closed — non-viable</h2>
+    <h2>Initiative closed — not feasible</h2>
     <div class="iid">${idea.id}</div>
-    <p>The Delivery Team has received the reviewer's feedback on <strong>${esc(idea.submission.title)}</strong>. Rework the idea and submit it again any time.</p>
+    <p>The Delivery Team has received the feedback on <strong>${esc(idea.submission.title)}</strong>. Rework the idea and submit it again any time.</p>
     <div class="hero-actions">
       <button class="btn btn-ghost" data-act="save-for-later" ${idea.savedForLater ? "disabled" : ""}>${idea.savedForLater ? "✓ Saved for Future Projects" : "Save for Future Projects"}</button>
       <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
@@ -921,7 +1071,7 @@ function originalCard(note) {
   return `
   <div class="card">
     <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
-    <p class="sub">${esc(note)}</p>
+    <p class="sub">${statusPill(s.status)} · ${esc(note)}</p>
     <div class="summary-block" style="margin-bottom:0">${esc(s.summary)}</div>
   </div>`;
 }
@@ -978,16 +1128,16 @@ function inspectionIdFor() {
 
 /* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
 const STEP_INFO = {
-  submit:   { desc: "The Delivery Team submits the idea on a single form — project context, the idea itself, benefit categories, related FSR, file attachments, and any linked PC1 incident.",
-              outcomes: ["Idea is logged with an Initiative ID and moves to ESL Review."] },
-  esl:      { desc: "The ESL Lead reviews the full submission, can edit it inline, adds feedback, and decides the outcome.",
-              outcomes: ["Option to edit — the ESL Lead refines the submission inline; the edit is logged.", "Agreed for Implementation — the Delivery Team creates an Action Plan.", "Return for Detail — the Delivery Team revises and resubmits.", "Unfeasible — written feedback goes back to the Delivery Team."] },
-  plan:     { desc: "The Delivery Team creates the Action Plan. The Inspection ID and action summary are prefilled; due date, person responsible, and comments are set by the team.",
-              outcomes: ["Action Plan is delivered, then marked complete to open the Post-Implementation Form."] },
-  postimpl: { desc: "The Delivery Team reviews the original submission and closes out with implementation comments, contact person, case study link, and the value delivered.",
+  submit:   { desc: "The Delivery Team submits the idea on a single form — status, project context, the idea itself, benefit categories, related FSR, file attachments, and any linked PC1 incident.",
+              outcomes: ["Idea is logged with an Initiative ID and its starting status, then moves to ESL Review."] },
+  esl:      { desc: "The ESL Lead acknowledges the idea. They do not decide its outcome — they can edit the submission inline, mark it as seen, or send it back for more detail.",
+              outcomes: ["Option to edit — the ESL Lead refines the submission inline; the edit is logged.", "Mark as Seen — the idea moves to tracking.", "Return for Detail — the Delivery Team revises and resubmits."] },
+  track:    { desc: "The idea is tracked by its status. Either the Delivery Team or the ESL Lead can move it between Identified, In Progress, Not Feasible and Implemented, and an Action Plan can be added at any point — it is optional.",
+              outcomes: ["Implemented — opens the Post-Implementation Form.", "Not Feasible — feedback goes back to the Delivery Team and the idea closes.", "Action Plan (optional) — owner, due date and comments, marked complete when the work is done."] },
+  postimpl: { desc: "Opened when the status becomes Implemented. The Delivery Team closes out with implementation comments, contact person, case study link, and the value delivered.",
               outcomes: ["Initiative is complete and on record."] },
-  done:     { desc: "The initiative is delivered, reviewed, and closed out.", outcomes: [] },
-  feedback: { desc: "The Delivery Team receives the reviewer's feedback on the non-viable idea and acknowledges it to close the initiative.",
+  done:     { desc: "The idea is implemented, reviewed, and closed out.", outcomes: [] },
+  feedback: { desc: "The Delivery Team receives the feedback on the idea marked Not Feasible and acknowledges it to close the initiative.",
               outcomes: ["Initiative closes — the idea can be reworked and resubmitted."] },
 };
 
@@ -1013,6 +1163,7 @@ function viewRecap(node, state) {
       <div class="summary-block">${esc(s.summary)}</div>
       <div class="kv">
         <dt>Idea title</dt><dd>${esc(s.title)}</dd>
+        <dt>Status</dt><dd>${statusPill(s.status)}</dd>
         <dt>Project</dt><dd>${esc(s.project)}</dd>
         <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
@@ -1023,23 +1174,23 @@ function viewRecap(node, state) {
         <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
         <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
       </div>`;
-  } else if (node.key === "esl") {
-    const d = idea.decisions[node.key];
-    const outcomeText = { approved: "Agreed for implementation.", "non-viable": "Marked unfeasible.", returned: "Returned to the Delivery Team for more detail." }[d.outcome];
+  } else if (node.key === "esl" && idea.decisions.esl) {
+    const d = idea.decisions.esl;
+    const outcomeText = { seen: "Marked as seen by the ESL Lead.", returned: "Returned to the Delivery Team for more detail." }[d.outcome];
     body = `
-      <div class="callout ${d.outcome === "non-viable" ? "red" : d.outcome === "returned" ? "amber" : "teal"}"><strong>Decision:</strong> ${outcomeText}${d.feedback ? `<br><strong>Feedback:</strong> ${esc(d.feedback)}` : ""}</div>
-      <p class="sub" style="margin:.7rem 0 0">Decided ${fmtDateTime(d.at)}. Comments from this stage are in the activity log below.</p>`;
-  } else if (node.key === "plan" && idea.actionPlan) {
+      <div class="callout ${d.outcome === "returned" ? "amber" : "teal"}"><strong>Outcome:</strong> ${esc(outcomeText)}${d.feedback ? `<br><strong>Note:</strong> ${esc(d.feedback)}` : ""}</div>
+      <p class="sub" style="margin:.7rem 0 0">Recorded ${fmtDateTime(d.at)}. Comments from this stage are in the activity log below.</p>`;
+  } else if (node.key === "track") {
     const ap = idea.actionPlan;
     body = `
       <div class="kv">
-        <dt>Related Inspection ID</dt><dd>${esc(ap.inspectionId)}</dd>
-        <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>
-        <dt>Due date</dt><dd>${fmtDate(ap.dueDate)}</dd>
-        <dt>Person responsible</dt><dd>${esc(ap.personResponsible)}</dd>
-        <dt>Comments</dt><dd>${esc(ap.comments || "—")}</dd>
-        <dt>Completed</dt><dd>${ap.completedAt ? fmtDate(ap.completedAt) : "In progress"}</dd>
-      </div>`;
+        <dt>Current status</dt><dd>${statusPill(ideaStatus())}</dd>
+        ${ap ? `
+        <dt>Action plan</dt><dd>${esc(ap.inspectionId)} · ${esc(ap.personResponsible)} · due ${fmtDate(ap.dueDate)} · ${ap.completedAt ? "complete" : "in progress"}</dd>
+        <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>`
+        : `<dt>Action plan</dt><dd>None raised (optional)</dd>`}
+      </div>
+      ${statusHistoryHtml()}`;
   } else if (node.key === "postimpl" && idea.postImpl) {
     const p = idea.postImpl;
     body = `
@@ -1079,6 +1230,8 @@ function readDraftFromForm() {
   idea.draft = {
     project: idea.draft.project, submitter: idea.draft.submitter,
     date: idea.draft.date,
+    status: g("f-status") ? g("f-status").value : (idea.draft.status || IDENTIFIED),
+    statusReason: g("f-status-reason") ? g("f-status-reason").value : (idea.draft.statusReason || ""),
     siteLocation: g("f-site").value, phase: g("f-phase").value,
     ideaType: (document.querySelector('input[name="ideaType"]:checked') || {}).value || "new",
     discipline: g("f-discipline").value,
@@ -1119,9 +1272,13 @@ function bindStage() {
   bindMultiSelects();
   bindOtherToggles();
   bindAttachments();
-  bindDecisionForm();
+  bindStatusForm();
+  const returnForm = document.getElementById("returnForm");
+  if (returnForm) returnForm.onsubmit = e => { e.preventDefault(); handleAction("submit-return"); };
+  const statusForm = document.getElementById("statusForm");
+  if (statusForm) statusForm.onsubmit = e => { e.preventDefault(); handleAction("update-status"); };
   const planForm = document.getElementById("planForm");
-  if (planForm) planForm.onsubmit = handleCreatePlan;
+  if (planForm) planForm.onsubmit = handleSavePlan;
   const pifForm = document.getElementById("pifForm");
   if (pifForm) pifForm.onsubmit = handleSubmitPif;
 
@@ -1167,6 +1324,16 @@ function bindMultiSelects() {
 /* Reveal a free-text "please specify" field whenever "Other" is chosen, for
    both the Discipline select and the Related FSR multiselect. */
 function bindOtherToggles() {
+  const st = document.getElementById("f-status");
+  const stReason = document.getElementById("field-status-reason-form");
+  const stNote = document.getElementById("f-status-note");
+  if (st && stReason) {
+    const t = () => {
+      stReason.hidden = st.value !== NOT_FEASIBLE;
+      if (stNote) stNote.textContent = STATUS_NOTE[st.value] || "";
+    };
+    st.addEventListener("change", t); t();
+  }
   const disc = document.getElementById("f-discipline");
   const discOther = document.getElementById("field-discipline-other");
   if (disc && discOther) {
@@ -1213,21 +1380,21 @@ function renderAttachmentList() {
   });
 }
 
-/* Decision form: show/hide the "required" marker on feedback as the outcome
-   changes (optional only when agreeing for implementation). */
-function bindDecisionForm() {
-  const df = document.getElementById("decisionForm");
-  if (!df) return;
-  const outcome = document.getElementById("decisionOutcome");
+/* Status control: reveal the reason + "save for future" fields when the
+   chosen status is Not Feasible, and keep the helper note in sync. */
+function bindStatusForm() {
+  const sel = document.getElementById("statusSelect");
+  if (!sel) return;
+  const note = document.getElementById("statusNote");
+  const reasonField = document.getElementById("field-status-reason");
   const saveFutureField = document.getElementById("field-save-future");
-  const saveFutureBox = document.getElementById("decisionSaveForFuture");
   const sync = () => {
-    df.classList.toggle("need-fb", !!outcome.value && outcome.value !== "approve");
-    const nonViable = outcome.value === "non-viable";
-    saveFutureField.hidden = !nonViable;
-    if (!nonViable) saveFutureBox.checked = false;
+    note.textContent = STATUS_NOTE[sel.value] || "";
+    const nf = sel.value === NOT_FEASIBLE;
+    reasonField.hidden = !nf;
+    saveFutureField.hidden = !nf;
   };
-  outcome.addEventListener("change", sync);
+  sel.addEventListener("change", sync);
   sync();
 }
 
@@ -1237,6 +1404,9 @@ function validateSubmissionForm() {
   const g = id => document.getElementById(id);
   const d = idea.draft;
   let bad = false;
+  if (d.status === NOT_FEASIBLE && g("f-status-reason")) {
+    bad = markInvalid(g("f-status-reason"), !(d.statusReason || "").trim()) || bad;
+  }
   bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
   bad = markInvalid(g("f-phase"), !d.phase) || bad;
   bad = markInvalid(g("f-discipline"), !d.discipline) || bad;
@@ -1266,10 +1436,14 @@ function handleSubmitIdea(e) {
     siteLocation: d.siteLocation.trim(), title: d.title.trim(), summary: d.summary.trim(),
     disciplineOther: (d.disciplineOther || "").trim(), fsrOther: (d.fsrOther || "").trim(),
     attachments: [...(d.attachments || [])],
+    status: d.status || IDENTIFIED,
     submittedAt: nowISO(),
   });
   idea.status = S.CONFIRM;
-  addLog("sys", revising ? "Idea revised and resubmitted." : "Idea submitted.");
+  addLog("sys", revising ? `Idea revised and resubmitted as ${idea.submission.status}.` : `Idea submitted as ${idea.submission.status}.`);
+  if (idea.submission.status === NOT_FEASIBLE) {
+    idea.notFeasible = { reason: (d.statusReason || "").trim(), by: actorName(), role: currentRole(), atKey: "esl", at: nowISO() };
+  }
   save(); render();
 }
 
@@ -1279,6 +1453,7 @@ function handleEslEditSave(e) {
   readDraftFromForm();
   if (validateSubmissionForm()) { toast("Please complete the required fields."); return; }
   const d = idea.draft;
+  const prevStatus = idea.submission.status;
   idea.submission = Object.assign({}, idea.submission, {
     siteLocation: d.siteLocation.trim(), phase: d.phase, ideaType: d.ideaType,
     discipline: d.discipline, disciplineOther: (d.disciplineOther || "").trim(),
@@ -1289,10 +1464,16 @@ function handleEslEditSave(e) {
   });
   eslEditing = false;
   addLog("sys", "ESL Lead edited the submission.");
+  /* Editing the detail can change the status too — route on it. */
+  if (d.status !== prevStatus) {
+    applyStatus(d.status, (d.statusReason || "").trim());
+    toast(`Submission updated — status is now ${d.status}.`);
+    return;
+  }
   save(); render(); toast("Submission updated.");
 }
 
-function handleCreatePlan(e) {
+function handleSavePlan(e) {
   e.preventDefault();
   const due = document.getElementById("ap-due");
   const person = document.getElementById("ap-person");
@@ -1300,17 +1481,19 @@ function handleCreatePlan(e) {
   bad = markInvalid(due, !due.value) || bad;
   bad = markInvalid(person, !person.value.trim()) || bad;
   if (bad) { toast("Please complete the required fields."); return; }
+  const existing = idea.actionPlan;
   idea.actionPlan = {
     inspectionId: inspectionIdFor(),
     actionSummary: document.getElementById("ap-summary").value,
     dueDate: due.value,
     personResponsible: person.value.trim(),
     comments: document.getElementById("ap-comments").value.trim(),
-    createdAt: nowISO(),
+    createdAt: existing ? existing.createdAt : nowISO(),
+    completedAt: existing ? existing.completedAt : null,
   };
-  idea.status = S.EXECUTION;
-  addLog("sys", `Action Plan created (${idea.actionPlan.inspectionId}).`);
-  save(); render(); toast("Action Plan created.");
+  planEditing = false;
+  addLog("sys", existing ? `Action Plan updated (${idea.actionPlan.inspectionId}).` : `Action Plan added (${idea.actionPlan.inspectionId}).`);
+  save(); render(); toast(existing ? "Action Plan updated." : "Action Plan added.");
 }
 
 function handleSubmitPif(e) {
@@ -1340,6 +1523,7 @@ function draftFromSubmission() {
   const s = idea.submission;
   return {
     project: s.project, submitter: s.submitter, date: s.date,
+    status: s.status || IDENTIFIED, statusReason: idea.notFeasible ? idea.notFeasible.reason : "",
     siteLocation: s.siteLocation, phase: s.phase, ideaType: s.ideaType || "new",
     discipline: s.discipline, disciplineOther: s.disciplineOther || "",
     title: s.title, summary: s.summary,
@@ -1348,39 +1532,7 @@ function draftFromSubmission() {
   };
 }
 
-/* Commit the ESL Lead's decision. `stage` is always "esl". */
-function submitDecision(stage, outcome, fb, saveForFuture) {
-  eslEditing = false;
-  if (fb) addLog("comment", fb);
-  switch (outcome) {
-    case "approve":
-      idea.decisions[stage] = { outcome: "approved", feedback: fb || undefined, at: nowISO() };
-      addLog("sys", "Agreed for implementation. Delivery Team to create Action Plan.");
-      idea.status = S.PLAN;
-      save(); render(); toast("Agreed for implementation — over to the Delivery Team.");
-      break;
-    case "non-viable":
-      idea.decisions[stage] = { outcome: "non-viable", feedback: fb, at: nowISO() };
-      addLog("sys", "Marked Unfeasible. Feedback provided for Delivery Team.");
-      idea.status = S.FEEDBACK;
-      if (saveForFuture) saveProjectForLater({ silent: true });
-      save(); render();
-      toast(saveForFuture ? "Marked unfeasible — feedback sent and saved for future projects." : "Marked unfeasible — feedback sent to the Delivery Team.");
-      break;
-    case "return": {
-      idea.decisions[stage] = { outcome: "returned", feedback: fb, at: nowISO() };
-      addLog("sys", "Returned for detail to the Delivery Team.");
-      idea.returnStage = stage;
-      idea.draft = draftFromSubmission();
-      idea.status = S.DRAFT;
-      save(); render(); toast("Returned to the Delivery Team for more detail.");
-      break;
-    }
-  }
-}
-
 function handleAction(act) {
-  const stageKey = "esl";
   switch (act) {
     case "back": peek = null; render(); break;
     case "continue-review":
@@ -1391,11 +1543,72 @@ function handleAction(act) {
     case "esl-edit":
       idea.draft = draftFromSubmission();
       eslEditing = true;
+      eslReturning = false;
       render();
       break;
     case "cancel-edit":
       eslEditing = false;
       render();
+      break;
+    case "mark-seen":
+      idea.eslSeen = true;
+      idea.decisions.esl = { outcome: "seen", at: nowISO() };
+      eslReturning = false;
+      addLog("sys", "Marked as seen by the ESL Lead.");
+      idea.status = stageForStatus(ideaStatus());
+      save(); render();
+      toast(idea.status === S.POST ? "Seen — status is Implemented, so close it out below."
+          : idea.status === S.FEEDBACK ? "Seen — status is Not Feasible, feedback sent to the Delivery Team."
+          : "Marked as seen — now tracked by the Delivery Team.");
+      break;
+    case "show-return":
+      eslReturning = true;
+      render();
+      break;
+    case "cancel-return":
+      eslReturning = false;
+      render();
+      break;
+    case "submit-return": {
+      const fbEl = document.getElementById("returnFeedback");
+      const fb = fbEl.value.trim();
+      if (!fb) { markInvalid(fbEl, true); toast("Please say what detail is missing."); return; }
+      idea.decisions.esl = { outcome: "returned", feedback: fb, at: nowISO() };
+      addLog("comment", fb);
+      addLog("sys", "Returned for detail to the Delivery Team.");
+      eslReturning = false;
+      idea.returnStage = "esl";
+      idea.draft = draftFromSubmission();
+      idea.status = S.DRAFT;
+      save(); render(); toast("Returned to the Delivery Team for more detail.");
+      break;
+    }
+    case "update-status": {
+      const sel = document.getElementById("statusSelect");
+      const reasonEl = document.getElementById("statusReason");
+      const saveFutureEl = document.getElementById("statusSaveForFuture");
+      const next = sel.value;
+      const reason = reasonEl ? reasonEl.value.trim() : "";
+      if (next === NOT_FEASIBLE && !reason) { markInvalid(reasonEl, true); toast("A reason is required to mark an idea Not Feasible."); return; }
+      if (next === ideaStatus() && next !== NOT_FEASIBLE) { toast("Status unchanged."); return; }
+      applyStatus(next, reason, !!(saveFutureEl && saveFutureEl.checked && !saveFutureEl.disabled));
+      toast(next === IMPLEMENTED ? "Implemented — complete the Post-Implementation Form."
+          : next === NOT_FEASIBLE ? "Marked Not Feasible — feedback sent to the Delivery Team."
+          : `Status updated to ${next}.`);
+      break;
+    }
+    case "add-plan":
+      planEditing = true;
+      render();
+      break;
+    case "cancel-plan":
+      planEditing = false;
+      render();
+      break;
+    case "complete-plan":
+      idea.actionPlan.completedAt = nowISO();
+      addLog("sys", `Action Plan ${idea.actionPlan.inspectionId} marked complete.`);
+      save(); render(); toast("Action Plan marked complete.");
       break;
     case "add-comment": {
       const ta = document.getElementById("newComment");
@@ -1405,23 +1618,6 @@ function handleAction(act) {
       save(); render(); toast("Comment added.");
       break;
     }
-    case "submit-decision": {
-      const outcomeEl = document.getElementById("decisionOutcome");
-      const fbEl = document.getElementById("decisionFeedback");
-      const saveFutureEl = document.getElementById("decisionSaveForFuture");
-      const outcome = outcomeEl.value;
-      const fb = fbEl.value.trim();
-      if (!outcome) { markInvalid(outcomeEl, true); toast("Please choose an outcome."); return; }
-      if (outcome !== "approve" && !fb) { markInvalid(fbEl, true); toast("Feedback is required for this outcome."); return; }
-      submitDecision(stageKey, outcome, fb, !!(saveFutureEl && saveFutureEl.checked));
-      break;
-    }
-    case "mark-complete":
-      idea.actionPlan.completedAt = nowISO();
-      idea.status = S.POST;
-      addLog("sys", "Action Plan marked complete. Post-Implementation Form opened.");
-      save(); render(); toast("Marked complete — finish the Post-Implementation Form.");
-      break;
     case "ack-feedback":
       idea.status = S.CLOSED;
       addLog("sys", "Feedback received by Delivery Team. Initiative closed.");
@@ -1433,7 +1629,7 @@ function handleAction(act) {
     case "restart":
       idea = freshIdea();
       peek = null;
-      eslEditing = false;
+      eslEditing = eslReturning = planEditing = false;
       save(); render();
       toast("New idea started.");
       break;
@@ -1449,7 +1645,7 @@ function handleAction(act) {
 document.getElementById("resetBtn").onclick = () => {
   idea = freshIdea();
   peek = null;
-  eslEditing = false;
+  eslEditing = eslReturning = planEditing = false;
   save(); render();
   toast("Workflow reset.");
 };
