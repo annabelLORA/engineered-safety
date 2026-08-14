@@ -173,13 +173,7 @@
   .summary-block{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;font-size:.9rem;white-space:pre-wrap;margin-bottom:1rem}
   .iid{font-size:.8rem;font-weight:700;color:var(--teal-dark);letter-spacing:.05em}
 
-  /* ---------- Decisions ---------- */
-  .decisions{display:flex;flex-direction:column;gap:.9rem;margin-top:.4rem}
-  .decision{display:flex;gap:1rem;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:.9rem 1rem}
-  .decision .btn{flex:none;min-width:170px}
-  .decision p{font-size:.8rem;color:var(--muted)}
-  .reveal{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:1rem}
-  .reveal h3{font-size:.88rem;margin-bottom:.6rem}
+  /* ---------- Status form ---------- */
   .decision-form{display:flex;flex-direction:column;gap:1.05rem;margin-top:.4rem}
   .decision-form[hidden]{display:none}
 
@@ -302,54 +296,45 @@ const IDEA_STATUSES = [IDENTIFIED, IN_PROGRESS, NOT_FEASIBLE, IMPLEMENTED];
 const STATUS_NOTE = {
   [IDENTIFIED]: "Logged and being tracked — no work started yet.",
   [IN_PROGRESS]: "Work is underway. Add an Action Plan if the team wants one.",
-  [NOT_FEASIBLE]: "Closes the idea out with feedback for the Delivery Team.",
+  [NOT_FEASIBLE]: "Closes the idea out with a recorded reason.",
   [IMPLEMENTED]: "Opens the Post-Implementation Form to close the idea out.",
 };
 
-/* Workflow stages (one idea moves through these) */
+/* The workflow is two steps: Submission (status is set on the form and updated
+   from the idea record afterwards) and the Post-Implementation Form. The
+   screens below all sit inside one of those two steps. */
 const S = {
-  DRAFT: "draft",           // Delivery Team filling the form
-  CONFIRM: "confirm",       // submission confirmation screen
-  ESL: "review-esl",        // ESL Lead review
-  TRACK: "tracking",        // idea is tracked; status drives what happens next
-  POST: "post-impl",        // Post-Implementation Form
-  COMPLETE: "complete",
-  FEEDBACK: "feedback",     // not feasible, Delivery Team receives feedback
-  CLOSED: "closed",         // feedback acknowledged
+  DRAFT: "draft",           // step 1 — filling in the submission form
+  CONFIRM: "confirm",       // step 1 — submission confirmation screen
+  TRACK: "tracking",        // step 1 — submitted idea; status drives what happens next
+  POST: "post-impl",        // step 2 — Post-Implementation Form
+  COMPLETE: "complete",     // step 2 — closed out
+  FEEDBACK: "feedback",     // step 1 — not feasible, reason on record
+  CLOSED: "closed",         // step 1 — not feasible, acknowledged
 };
 
-const ROLE_FOR_STATUS = {
-  [S.DRAFT]: "Delivery Team", [S.CONFIRM]: "Delivery Team",
-  [S.ESL]: "ESL Lead",
-  [S.TRACK]: "Delivery Team",
-  [S.POST]: "Delivery Team", [S.COMPLETE]: "Delivery Team",
-  [S.FEEDBACK]: "Delivery Team", [S.CLOSED]: "Delivery Team",
-};
+const ROLE = "Delivery Team";
 
 const TITLE_FOR_STATUS = {
   [S.DRAFT]: "Submit a Safety Idea", [S.CONFIRM]: "Idea Submitted",
-  [S.ESL]: "ESL Lead Review",
   [S.TRACK]: "Track Safety Idea",
   [S.POST]: "Post-Implementation Form", [S.COMPLETE]: "Initiative Complete",
-  [S.FEEDBACK]: "Reviewer Feedback", [S.CLOSED]: "Initiative Closed",
+  [S.FEEDBACK]: "Idea Not Feasible", [S.CLOSED]: "Initiative Closed",
 };
 
 /* =============================================================
    State & persistence
 ============================================================= */
-const KEY = "es-flow-v3";
+const KEY = "es-flow-v4";
 let idea = null;
 let peek = null; // key of a tracker step being viewed (recap/preview), or null
-let eslEditing = false; // true while the ESL Lead is editing the submission inline
-let eslReturning = false; // true while the ESL Lead is writing a "return for detail" note
+let editing = false; // true while the submission is being edited inline
 let planEditing = false; // true while the optional Action Plan form is open
 
 function freshIdea() {
   return {
     status: S.DRAFT,
     id: null,
-    returnStage: null,     // "esl" while a returned idea is being revised & resubmitted
-    eslSeen: false,        // true once the ESL Lead has marked the idea as seen
     notFeasible: null,     // {reason, by, role, atKey, at} once marked Not Feasible
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
@@ -366,8 +351,7 @@ function freshIdea() {
       incident: "",
     },
     submission: null,      // frozen copy on submit
-    decisions: {},         // esl: {outcome: "seen"|"returned", feedback?, at}
-    actionPlan: null,      // optional — added from the tracking screen
+    actionPlan: null,      // optional — added from the idea record
     statusHistory: [],     // {from, to, by, role, at}
     postImpl: null,
     log: [],
@@ -434,13 +418,12 @@ function esc(s) {
 function addLog(type, text, who, role) {
   idea.log.push({ at: nowISO(), who: who || actorName(), role: role || currentRole(), type, text });
 }
-/* Role currently acting for the given status. */
+/* The whole workflow is owned by one role. */
 function currentRole() {
-  return ROLE_FOR_STATUS[idea.status];
+  return ROLE;
 }
 function actorName() {
-  const r = currentRole();
-  return r === "Delivery Team" ? (idea.submission ? idea.submission.submitter : PROFILE.name) : r;
+  return idea.submission ? idea.submission.submitter : PROFILE.name;
 }
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -454,34 +437,16 @@ function toast(msg) {
    Workflow path model — drives the clickable tracker
 ============================================================= */
 function buildPath() {
-  const nf = idea.notFeasible;
-  const nodes = [
-    { key: "submit", name: "Submit Idea", role: "Delivery Team" },
-    { key: "esl", name: "ESL Review", role: "ESL Lead" },
+  return [
+    { key: "submit", name: "Submission", role: ROLE },
+    { key: "postimpl", name: "Post-Implementation", role: ROLE },
   ];
-  if (nf) {
-    /* An idea can be marked Not Feasible at ESL review or while being tracked;
-       only show the tracking node when it actually got that far. */
-    if (nf.atKey !== "esl") nodes.push({ key: "track", name: "Tracking", role: "Delivery Team" });
-    nodes.push({ key: "feedback", name: "Receive Feedback", role: "Delivery Team" });
-  } else {
-    nodes.push(
-      { key: "track", name: "Tracking", role: "Delivery Team" },
-      { key: "postimpl", name: "Post-Implementation", role: "Delivery Team" },
-      { key: "done", name: "Complete", role: "Delivery Team" },
-    );
-  }
-  return nodes;
 }
 
 function currentKey() {
   switch (idea.status) {
-    case S.DRAFT: case S.CONFIRM: return "submit";
-    case S.ESL: return "esl";
-    case S.TRACK: return "track";
-    case S.POST: return "postimpl";
-    case S.COMPLETE: return "done";
-    case S.FEEDBACK: case S.CLOSED: return "feedback";
+    case S.POST: case S.COMPLETE: return "postimpl";
+    default: return "submit";
   }
 }
 
@@ -504,7 +469,7 @@ function ideaStatus() {
   return (idea.submission ? idea.submission.status : idea.draft.status) || IDENTIFIED;
 }
 
-/* Where an idea sits given its status, once the ESL Lead has seen it. */
+/* Where an idea sits given its status. */
 function stageForStatus(status) {
   if (status === IMPLEMENTED) return idea.postImpl ? S.COMPLETE : S.POST;
   if (status === NOT_FEASIBLE) return S.FEEDBACK;
@@ -530,9 +495,7 @@ function applyStatus(next, reason, saveForFuture) {
     idea.notFeasible = null;   /* re-opened from Not Feasible */
   }
 
-  /* The ESL Lead's acknowledgement still gates the idea: until it's marked as
-     seen, a status change is recorded but the idea stays in review. */
-  idea.status = idea.eslSeen ? stageForStatus(next) : S.ESL;
+  idea.status = stageForStatus(next);
   save(); render();
 }
 
@@ -541,8 +504,8 @@ function statusPill(status) {
   return `<span class="pill ${cls}">${esc(status)}</span>`;
 }
 
-/* Status control shown on the ESL review, tracking and post-implementation
-   screens — either role can update the status from wherever they are. */
+/* Status control shown on the idea record and the post-implementation screen —
+   the status set on the submission form is updated from here. */
 function statusCard() {
   const cur = ideaStatus();
   const opts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
@@ -551,7 +514,7 @@ function statusCard() {
     <div class="review-head">
       <div>
         <h2>Idea Status</h2>
-        <p class="sub">Current status ${statusPill(cur)} · updating as ${esc(currentRole())}</p>
+        <p class="sub">Current status ${statusPill(cur)} · set on the submission form, updated here</p>
       </div>
     </div>
     <form class="decision-form" id="statusForm" novalidate>
@@ -562,7 +525,7 @@ function statusCard() {
       </div>
       <div class="field" id="field-status-reason" hidden>
         <label for="statusReason">Why is this not feasible? <span class="req">*</span></label>
-        <textarea id="statusReason" placeholder="Feedback for the Delivery Team…">${esc(idea.notFeasible ? idea.notFeasible.reason : "")}</textarea>
+        <textarea id="statusReason" placeholder="Record why this idea can't proceed…">${esc(idea.notFeasible ? idea.notFeasible.reason : "")}</textarea>
         <div class="err">A reason is required when marking an idea Not Feasible.</div>
       </div>
       <div class="field checkbox-field" id="field-save-future" hidden>
@@ -603,18 +566,18 @@ function render() {
   const nodes = buildPath();
   const states = nodeStates(nodes);
   const cur = nodes.findIndex(n => n.key === currentKey());
-  const terminal = [S.COMPLETE, S.CLOSED].includes(idea.status);
   const doneCount = states.filter(s => s === "done" || s === "dead").length;
-  const pct = terminal ? 100 : Math.round((doneCount / nodes.length) * 100);
+  const pct = idea.status === S.COMPLETE ? 100 : Math.round((doneCount / nodes.length) * 100);
+  const pctLabel = idea.notFeasible ? "Closed — not feasible" : pct + "% complete";
 
-  $title.textContent = (idea.returnStage && idea.status === S.DRAFT) ? "Revise & Resubmit Idea" : TITLE_FOR_STATUS[idea.status];
+  $title.textContent = TITLE_FOR_STATUS[idea.status];
   $roleChip.textContent = "Acting as: " + currentRole();
   $saved.classList.toggle("show", false);
 
   $tracker.innerHTML = `
     <div class="tracker-top">
       <span class="stage-label">Stage ${Math.min(cur + 1, nodes.length)} of ${nodes.length} — ${esc(nodes[cur].name)} (${esc(nodes[cur].role)})</span>
-      <span class="pct">${pct}% complete</span>
+      <span class="pct">${pctLabel}</span>
     </div>
     <div class="tracker-bar"><span style="width:${pct}%"></span></div>
     <div class="steps">
@@ -649,8 +612,7 @@ function viewStage() {
   switch (idea.status) {
     case S.DRAFT: return viewSubmitForm();
     case S.CONFIRM: return viewConfirm();
-    case S.ESL: return eslEditing ? viewEslEditForm() : viewReview();
-    case S.TRACK: return viewTracking();
+    case S.TRACK: return editing ? viewEditForm() : viewTracking();
     case S.POST: return viewPostForm();
     case S.COMPLETE: return viewComplete();
     case S.FEEDBACK: return viewFeedback();
@@ -767,36 +729,26 @@ function submissionFormGrid(d) {
     </div>`;
 }
 
-/* ---- Stage 1: submission form ---- */
+/* ---- Step 1: submission form (status is part of the form) ---- */
 function viewSubmitForm() {
-  const d = idea.draft;
-  const revising = !!idea.returnStage;
-
-  const returnFb = revising ? (idea.decisions[idea.returnStage] || {}).feedback : "";
-  const returnBanner = revising ? `
-    <div class="callout amber" style="margin-bottom:1.2rem"><strong>Returned for detail by the ESL Lead:</strong> ${esc(returnFb || "Please add more detail before resubmitting.")}</div>`
-    : "";
-
   return `
   <form class="card" id="submitForm" novalidate>
-    ${returnBanner}
-    ${submissionFormGrid(d)}
+    ${submissionFormGrid(idea.draft)}
     <div class="form-actions">
       <button type="button" class="btn btn-red-outline" id="saveDraftBtn">Save Draft</button>
       <div class="right">
-        <button type="submit" class="btn btn-red">${revising ? "Resubmit Idea →" : "Submit Idea →"}</button>
+        <button type="submit" class="btn btn-red">Submit Idea →</button>
       </div>
     </div>
   </form>`;
 }
 
-/* ---- ESL Lead inline edit of the submission (the "Option to edit") ---- */
-function viewEslEditForm() {
-  const d = idea.draft;
+/* ---- Inline edit of a submitted idea ---- */
+function viewEditForm() {
   return `
-  <form class="card" id="eslEditForm" novalidate>
-    <div class="callout teal" style="margin-bottom:1.2rem"><strong>Editing the submission as ESL Lead.</strong> Update any details below, then save your edits. The change is recorded in the activity log.</div>
-    ${submissionFormGrid(d)}
+  <form class="card" id="editForm" novalidate>
+    <div class="callout teal" style="margin-bottom:1.2rem"><strong>Editing the submission.</strong> Update any details below, then save your edits. The change is recorded in the activity log.</div>
+    ${submissionFormGrid(idea.draft)}
     <div class="form-actions">
       <button type="button" class="btn btn-ghost" data-act="cancel-edit">Cancel</button>
       <div class="right">
@@ -809,35 +761,42 @@ function viewEslEditForm() {
 /* ---- Submission confirmation ---- */
 function viewConfirm() {
   const s = idea.submission;
-  const resubmit = !!idea.returnStage;
   return `
   <div class="card hero">
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h2>${resubmit ? "Idea resubmitted" : "Idea submitted"}</h2>
+    <h2>Idea submitted</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(s.title)}</strong> has been ${resubmit ? "revised and now returns" : "logged as"} ${resubmit ? "" : statusPill(s.status)} ${resubmit ? "" : "and moves"} to the ESL Lead for review.</p>
+    <p><strong>${esc(s.title)}</strong> has been logged as ${statusPill(s.status)}.</p>
     <ol class="flow">
-      <li><span class="n">1</span><div class="t"><b>ESL Lead review</b><span>The ESL Lead may edit the submission, then either mark it as seen or return it for more detail.</span></div></li>
-      <li><span class="n">2</span><div class="t"><b>Tracking</b><span>The idea is tracked by its status. Either role can move it between Identified, In Progress, Not Feasible and Implemented, and add an Action Plan if the team wants one.</span></div></li>
-      <li><span class="n">3</span><div class="t"><b>Close-out</b><span>Setting the status to Implemented opens the Post-Implementation Form; Not Feasible closes the idea with feedback.</span></div></li>
+      <li><span class="n">1</span><div class="t"><b>Submission</b><span>The idea is on record with its status. Update the status as the work moves along, edit the detail, and add an Action Plan if the team wants one.</span></div></li>
+      <li><span class="n">2</span><div class="t"><b>Post-Implementation</b><span>Setting the status to Implemented opens the Post-Implementation Form to close the idea out.</span></div></li>
     </ol>
     <div class="hero-actions">
-      <button class="btn btn-red" data-act="continue-review">Continue to ESL Review →</button>
+      <button class="btn btn-red" data-act="continue">Continue →</button>
     </div>
   </div>`;
 }
 
-/* ---- Stage 2: ESL Lead review ---- */
-function viewReview() {
+/* ---- Step 1 (after submitting): the idea record — status-driven ---- */
+function viewTracking() {
+  return `
+  ${submissionCard()}
+  ${statusCard()}
+  ${actionPlanCard()}
+  ${commentsCard()}`;
+}
+
+/* Full detail of the submitted idea, with the option to edit it inline. */
+function submissionCard() {
   const s = idea.submission;
   return `
   <div class="card">
     <div class="review-head">
       <div>
         <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
-        <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${s.editedAt ? " · edited by ESL Lead" : ""} · ${statusPill(s.status)}</p>
+        <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${s.editedAt ? " · edited " + fmtDate(s.editedAt) : ""} · ${statusPill(s.status)}</p>
       </div>
-      <button type="button" class="btn btn-teal-outline btn-sm" data-act="esl-edit">✎ Edit submission</button>
+      <button type="button" class="btn btn-teal-outline btn-sm" data-act="edit-submission">✎ Edit submission</button>
     </div>
     <div class="summary-block">${esc(s.summary)}</div>
     <div class="kv">
@@ -854,43 +813,7 @@ function viewReview() {
       <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
       <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
     </div>
-  </div>
-  <div class="card">
-    <h2>ESL Lead Review</h2>
-    <p class="sub">The ESL Lead does not decide the outcome — acknowledge the idea so the team can get on with tracking it, or send it back if there isn't enough detail. You can also edit the submission inline first.</p>
-    <div class="decisions">
-      <div class="decision">
-        <button class="btn btn-teal" data-act="mark-seen">Mark as Seen</button>
-        <p>Acknowledges the idea. It moves to tracking, where either role updates its status.</p>
-      </div>
-      <div class="decision">
-        <button class="btn btn-red-outline" data-act="show-return">Return for Detail</button>
-        <p>Sends the idea back to the Delivery Team to be revised and resubmitted. A note is required.</p>
-      </div>
-    </div>
-    <form class="decision-form" id="returnForm" novalidate ${eslReturning ? "" : "hidden"} style="margin-top:1rem">
-      <div class="field">
-        <label for="returnFeedback">What extra detail is needed? <span class="req">*</span></label>
-        <textarea id="returnFeedback" placeholder="Tell the Delivery Team what to add…"></textarea>
-        <div class="err">Please say what detail is missing.</div>
-      </div>
-      <div class="form-actions" style="margin-top:0;border-top:none;padding-top:0">
-        <button type="button" class="btn btn-ghost" data-act="cancel-return">Cancel</button>
-        <div class="right"><button type="submit" class="btn btn-red" data-act="submit-return">Return for Detail →</button></div>
-      </div>
-    </form>
-  </div>
-  ${statusCard()}
-  ${commentsCard()}`;
-}
-
-/* ---- Stage 3: tracking — status-driven, Action Plan optional ---- */
-function viewTracking() {
-  return `
-  ${originalCard("Seen by the ESL Lead. Track the idea by updating its status; add an Action Plan if the team wants one.")}
-  ${statusCard()}
-  ${actionPlanCard()}
-  ${commentsCard()}`;
+  </div>`;
 }
 
 /* The Action Plan is optional from here on — it can be added, edited and
@@ -969,7 +892,7 @@ function actionPlanForm() {
   </form>`;
 }
 
-/* ---- Stage 4: post-implementation, opened by status = Implemented ---- */
+/* ---- Step 2: post-implementation, opened by status = Implemented ---- */
 function viewPostForm() {
   const ap = idea.actionPlan;
   return `
@@ -1036,17 +959,18 @@ function viewFeedback() {
   return `
   <div class="card">
     <h2><span class="iid">${idea.id}</span> · ${esc(idea.submission.title)}</h2>
-    <p class="sub">This idea was marked ${statusPill(NOT_FEASIBLE)} by the ${esc(nf.role || "ESL Lead")} on ${fmtDate(nf.at)}. The feedback below is for your team.</p>
-    <div class="callout red"><strong>Feedback:</strong> ${esc(nf.reason || "No reason recorded.")}</div>
+    <p class="sub">This idea was marked ${statusPill(NOT_FEASIBLE)} by ${esc(nf.by || actorName())} on ${fmtDate(nf.at)}. The reason below is on record.</p>
+    <div class="callout red"><strong>Reason:</strong> ${esc(nf.reason || "No reason recorded.")}</div>
     <div style="margin-top:1rem">${statusHistoryHtml()}</div>
     <div class="form-actions">
       <span style="font-size:.78rem;color:var(--muted)">${idea.savedForLater ? "Saved to the future-projects library." : "Not ready to rework right now? Save this idea for a future project."}</span>
       <div class="right">
         <button class="btn btn-ghost" data-act="save-for-later" ${idea.savedForLater ? "disabled" : ""}>${idea.savedForLater ? "✓ Saved for Future Projects" : "Save for Future Projects"}</button>
-        <button class="btn btn-red" data-act="ack-feedback">Acknowledge Feedback →</button>
+        <button class="btn btn-red" data-act="ack-feedback">Close Idea Out →</button>
       </div>
     </div>
   </div>
+  ${statusCard()}
   ${commentsCard()}`;
 }
 
@@ -1056,7 +980,7 @@ function viewClosed() {
     <div class="mark bad"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></div>
     <h2>Initiative closed — not feasible</h2>
     <div class="iid">${idea.id}</div>
-    <p>The Delivery Team has received the feedback on <strong>${esc(idea.submission.title)}</strong>. Rework the idea and submit it again any time.</p>
+    <p><strong>${esc(idea.submission.title)}</strong> is closed out with the reason on record. Rework the idea and submit it again any time.</p>
     <div class="hero-actions">
       <button class="btn btn-ghost" data-act="save-for-later" ${idea.savedForLater ? "disabled" : ""}>${idea.savedForLater ? "✓ Saved for Future Projects" : "Save for Future Projects"}</button>
       <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
@@ -1087,11 +1011,11 @@ function commentsCard(readOnly) {
   return `
   <div class="card">
     <h2>Comments &amp; activity</h2>
-    <p class="sub">Full history of comments and workflow decisions.</p>
+    <p class="sub">Full history of comments and status changes.</p>
     ${logHtml}
     ${readOnly ? "" : `
     <div class="comment-box">
-      <textarea id="newComment" placeholder="Add a comment as ${ROLE_FOR_STATUS[idea.status]}…"></textarea>
+      <textarea id="newComment" placeholder="Add a comment as ${esc(currentRole())}…"></textarea>
       <button class="btn btn-ghost" data-act="add-comment" type="button">Add</button>
     </div>`}
   </div>`;
@@ -1128,17 +1052,13 @@ function inspectionIdFor() {
 
 /* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
 const STEP_INFO = {
-  submit:   { desc: "The Delivery Team submits the idea on a single form — status, project context, the idea itself, benefit categories, related FSR, file attachments, and any linked PC1 incident.",
-              outcomes: ["Idea is logged with an Initiative ID and its starting status, then moves to ESL Review."] },
-  esl:      { desc: "The ESL Lead acknowledges the idea. They do not decide its outcome — they can edit the submission inline, mark it as seen, or send it back for more detail.",
-              outcomes: ["Option to edit — the ESL Lead refines the submission inline; the edit is logged.", "Mark as Seen — the idea moves to tracking.", "Return for Detail — the Delivery Team revises and resubmits."] },
-  track:    { desc: "The idea is tracked by its status. Either the Delivery Team or the ESL Lead can move it between Identified, In Progress, Not Feasible and Implemented, and an Action Plan can be added at any point — it is optional.",
-              outcomes: ["Implemented — opens the Post-Implementation Form.", "Not Feasible — feedback goes back to the Delivery Team and the idea closes.", "Action Plan (optional) — owner, due date and comments, marked complete when the work is done."] },
-  postimpl: { desc: "Opened when the status becomes Implemented. The Delivery Team closes out with implementation comments, contact person, case study link, and the value delivered.",
+  submit:   { desc: "The idea is submitted on a single form — idea status, project context, the idea itself, benefit categories, related FSR, file attachments, and any linked PC1 incident. Once it's logged, the idea is tracked from its record by that same status.",
+              outcomes: ["Idea is logged with an Initiative ID and its starting status.",
+                         "Status moves between Identified, In Progress, Not Feasible and Implemented as the work progresses.",
+                         "Action Plan (optional) — owner, due date and comments, marked complete when the work is done.",
+                         "Not Feasible closes the idea out with the reason on record."] },
+  postimpl: { desc: "Opened when the status becomes Implemented. Close the idea out with implementation comments, contact person, case study link, and the value delivered.",
               outcomes: ["Initiative is complete and on record."] },
-  done:     { desc: "The idea is implemented, reviewed, and closed out.", outcomes: [] },
-  feedback: { desc: "The Delivery Team receives the feedback on the idea marked Not Feasible and acknowledges it to close the initiative.",
-              outcomes: ["Initiative closes — the idea can be reworked and resubmitted."] },
 };
 
 function viewPreview(node) {
@@ -1159,6 +1079,7 @@ function viewRecap(node, state) {
   let body = "";
   const s = idea.submission;
   if (node.key === "submit" && s) {
+    const ap = idea.actionPlan;
     body = `
       <div class="summary-block">${esc(s.summary)}</div>
       <div class="kv">
@@ -1173,18 +1094,6 @@ function viewRecap(node, state) {
         <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
         <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
-      </div>`;
-  } else if (node.key === "esl" && idea.decisions.esl) {
-    const d = idea.decisions.esl;
-    const outcomeText = { seen: "Marked as seen by the ESL Lead.", returned: "Returned to the Delivery Team for more detail." }[d.outcome];
-    body = `
-      <div class="callout ${d.outcome === "returned" ? "amber" : "teal"}"><strong>Outcome:</strong> ${esc(outcomeText)}${d.feedback ? `<br><strong>Note:</strong> ${esc(d.feedback)}` : ""}</div>
-      <p class="sub" style="margin:.7rem 0 0">Recorded ${fmtDateTime(d.at)}. Comments from this stage are in the activity log below.</p>`;
-  } else if (node.key === "track") {
-    const ap = idea.actionPlan;
-    body = `
-      <div class="kv">
-        <dt>Current status</dt><dd>${statusPill(ideaStatus())}</dd>
         ${ap ? `
         <dt>Action plan</dt><dd>${esc(ap.inspectionId)} · ${esc(ap.personResponsible)} · due ${fmtDate(ap.dueDate)} · ${ap.completedAt ? "complete" : "in progress"}</dd>
         <dt>Action required</dt><dd>${esc(ap.actionSummary)}</dd>`
@@ -1206,7 +1115,7 @@ function viewRecap(node, state) {
   return `
   <div class="card">
     <div class="peek-head">
-      <span class="t ${state === "dead" ? "dead" : "done"}">${state === "dead" ? "Decision made here" : "Completed step"}</span>
+      <span class="t ${state === "dead" ? "dead" : "done"}">${state === "dead" ? "Closed here" : "Completed step"}</span>
       <button class="btn btn-ghost btn-sm" data-act="back">← Back to current step</button>
     </div>
     <h2>${esc(node.name)} <span class="sub" style="display:inline;font-weight:500">· ${esc(node.role)}</span></h2>
@@ -1267,14 +1176,12 @@ function bindStage() {
       toast("Draft saved.");
     };
   }
-  const eslForm = document.getElementById("eslEditForm");
-  if (eslForm) eslForm.onsubmit = handleEslEditSave;
+  const editForm = document.getElementById("editForm");
+  if (editForm) editForm.onsubmit = handleEditSave;
   bindMultiSelects();
   bindOtherToggles();
   bindAttachments();
   bindStatusForm();
-  const returnForm = document.getElementById("returnForm");
-  if (returnForm) returnForm.onsubmit = e => { e.preventDefault(); handleAction("submit-return"); };
   const statusForm = document.getElementById("statusForm");
   if (statusForm) statusForm.onsubmit = e => { e.preventDefault(); handleAction("update-status"); };
   const planForm = document.getElementById("planForm");
@@ -1429,7 +1336,6 @@ function handleSubmitIdea(e) {
   readDraftFromForm();
   if (validateSubmissionForm()) { toast("Please complete the required fields."); return; }
   const d = idea.draft;
-  const revising = !!idea.returnStage;
   if (!idea.id) idea.id = nextInitiativeId();
   idea.submission = Object.assign({}, d, {
     project: d.project.trim(), submitter: d.submitter.trim(),
@@ -1440,15 +1346,15 @@ function handleSubmitIdea(e) {
     submittedAt: nowISO(),
   });
   idea.status = S.CONFIRM;
-  addLog("sys", revising ? `Idea revised and resubmitted as ${idea.submission.status}.` : `Idea submitted as ${idea.submission.status}.`);
+  addLog("sys", `Idea submitted as ${idea.submission.status}.`);
   if (idea.submission.status === NOT_FEASIBLE) {
-    idea.notFeasible = { reason: (d.statusReason || "").trim(), by: actorName(), role: currentRole(), atKey: "esl", at: nowISO() };
+    idea.notFeasible = { reason: (d.statusReason || "").trim(), by: actorName(), role: currentRole(), atKey: "submit", at: nowISO() };
   }
   save(); render();
 }
 
-/* ESL Lead saves inline edits back onto the frozen submission. */
-function handleEslEditSave(e) {
+/* Inline edits saved back onto the frozen submission. */
+function handleEditSave(e) {
   e.preventDefault();
   readDraftFromForm();
   if (validateSubmissionForm()) { toast("Please complete the required fields."); return; }
@@ -1462,8 +1368,8 @@ function handleEslEditSave(e) {
     incident: d.incident, attachments: [...(d.attachments || [])],
     editedAt: nowISO(),
   });
-  eslEditing = false;
-  addLog("sys", "ESL Lead edited the submission.");
+  editing = false;
+  addLog("sys", "Submission edited.");
   /* Editing the detail can change the status too — route on it. */
   if (d.status !== prevStatus) {
     applyStatus(d.status, (d.statusReason || "").trim());
@@ -1535,54 +1441,19 @@ function draftFromSubmission() {
 function handleAction(act) {
   switch (act) {
     case "back": peek = null; render(); break;
-    case "continue-review":
-      idea.status = S.ESL;
-      idea.returnStage = null;
+    case "continue":
+      idea.status = stageForStatus(ideaStatus());
       save(); render();
       break;
-    case "esl-edit":
+    case "edit-submission":
       idea.draft = draftFromSubmission();
-      eslEditing = true;
-      eslReturning = false;
+      editing = true;
       render();
       break;
     case "cancel-edit":
-      eslEditing = false;
+      editing = false;
       render();
       break;
-    case "mark-seen":
-      idea.eslSeen = true;
-      idea.decisions.esl = { outcome: "seen", at: nowISO() };
-      eslReturning = false;
-      addLog("sys", "Marked as seen by the ESL Lead.");
-      idea.status = stageForStatus(ideaStatus());
-      save(); render();
-      toast(idea.status === S.POST ? "Seen — status is Implemented, so close it out below."
-          : idea.status === S.FEEDBACK ? "Seen — status is Not Feasible, feedback sent to the Delivery Team."
-          : "Marked as seen — now tracked by the Delivery Team.");
-      break;
-    case "show-return":
-      eslReturning = true;
-      render();
-      break;
-    case "cancel-return":
-      eslReturning = false;
-      render();
-      break;
-    case "submit-return": {
-      const fbEl = document.getElementById("returnFeedback");
-      const fb = fbEl.value.trim();
-      if (!fb) { markInvalid(fbEl, true); toast("Please say what detail is missing."); return; }
-      idea.decisions.esl = { outcome: "returned", feedback: fb, at: nowISO() };
-      addLog("comment", fb);
-      addLog("sys", "Returned for detail to the Delivery Team.");
-      eslReturning = false;
-      idea.returnStage = "esl";
-      idea.draft = draftFromSubmission();
-      idea.status = S.DRAFT;
-      save(); render(); toast("Returned to the Delivery Team for more detail.");
-      break;
-    }
     case "update-status": {
       const sel = document.getElementById("statusSelect");
       const reasonEl = document.getElementById("statusReason");
@@ -1593,7 +1464,7 @@ function handleAction(act) {
       if (next === ideaStatus() && next !== NOT_FEASIBLE) { toast("Status unchanged."); return; }
       applyStatus(next, reason, !!(saveFutureEl && saveFutureEl.checked && !saveFutureEl.disabled));
       toast(next === IMPLEMENTED ? "Implemented — complete the Post-Implementation Form."
-          : next === NOT_FEASIBLE ? "Marked Not Feasible — feedback sent to the Delivery Team."
+          : next === NOT_FEASIBLE ? "Marked Not Feasible — the idea is closed out with the reason on record."
           : `Status updated to ${next}.`);
       break;
     }
@@ -1620,8 +1491,8 @@ function handleAction(act) {
     }
     case "ack-feedback":
       idea.status = S.CLOSED;
-      addLog("sys", "Feedback received by Delivery Team. Initiative closed.");
-      save(); render(); toast("Feedback acknowledged.");
+      addLog("sys", "Initiative closed as not feasible.");
+      save(); render(); toast("Idea closed out.");
       break;
     case "save-for-later":
       saveProjectForLater();
@@ -1629,7 +1500,7 @@ function handleAction(act) {
     case "restart":
       idea = freshIdea();
       peek = null;
-      eslEditing = eslReturning = planEditing = false;
+      editing = planEditing = false;
       save(); render();
       toast("New idea started.");
       break;
@@ -1645,7 +1516,7 @@ function handleAction(act) {
 document.getElementById("resetBtn").onclick = () => {
   idea = freshIdea();
   peek = null;
-  eslEditing = eslReturning = planEditing = false;
+  editing = planEditing = false;
   save(); render();
   toast("Workflow reset.");
 };
