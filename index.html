@@ -259,15 +259,6 @@ const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Hando
 
 const DISCIPLINES = ["Civils", "Structural", "Building", "Other"];
 
-const BENEFIT_CATEGORIES = [
-  "Acute Safety",
-  "Chronic Health",
-  "Public Safety",
-  "Environment & Sustainability",
-  "Delivery Efficiency & Constructability",
-  "Future Operations",
-];
-
 const FSR_CATEGORIES = [
   "Plant & Equipment", "Cranes & Lifting", "Excavation", "Piling",
   "Work in Rail Environments", "Heavy Vehicles", "Traffic Management",
@@ -325,7 +316,7 @@ const TITLE_FOR_STATUS = {
 /* =============================================================
    State & persistence
 ============================================================= */
-const KEY = "es-flow-v4";
+const KEY = "es-flow-v5";
 let idea = null;
 let peek = null; // key of a tracker step being viewed (recap/preview), or null
 let editing = false; // true while the submission is being edited inline
@@ -339,12 +330,12 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "FBA North", phase: "Construction", ideaType: "new", discipline: "Structural",
+      siteLocation: "FBA North", phase: "Construction", discipline: "Structural",
       disciplineOther: "",
       status: IDENTIFIED,
       title: "Use of precast viaduct structures constructed at ground level.",
       summary: "Maximising the use of precast concrete bridge piers and modular spans, which are assembled off-site and craned into place during scheduled short-term network closures. Drastically reduces high-risk construction hours over water, mitigates environmental spill risks, and significantly limits disruption to critical transport arteries.",
-      benefit: ["Acute Safety", "Delivery Efficiency & Constructability"],
+      healthBenefit: "Moves formwork and concrete finishing to a controlled ground-level yard, cutting workers' exposure to work at height, manual handling strain, and silica dust over water.",
       fsr: ["Falls & Dropped Objects", "Formwork & Falsework"],
       fsrOther: "",
       attachments: [],
@@ -390,7 +381,7 @@ function saveProjectForLater(opts) {
     summary: s.summary,
     project: s.project,
     discipline: s.discipline,
-    benefit: s.benefit,
+    healthBenefit: s.healthBenefit,
     fsr: s.fsr,
     decidedBy: nf ? nf.role : "",
     feedback: nf ? nf.reason : "",
@@ -671,13 +662,6 @@ function submissionFormGrid(d) {
         <div class="err">Please select the applicable phase.</div>
       </div>
       <div class="field full">
-        <label>Idea Type <span class="req">*</span></label>
-        <div class="checks">
-          <label><input type="radio" name="ideaType" value="new" ${d.ideaType === "implementation" ? "" : "checked"}> New idea</label>
-          <label><input type="radio" name="ideaType" value="implementation" ${d.ideaType === "implementation" ? "checked" : ""}> Implementation of previous idea</label>
-        </div>
-      </div>
-      <div class="field full">
         <label for="f-title">Idea Title <span class="req">*</span></label>
         <input type="text" id="f-title" maxlength="120" placeholder="Short, descriptive name for the idea" value="${esc(d.title)}">
         <div class="err">Please give the idea a title.</div>
@@ -686,6 +670,10 @@ function submissionFormGrid(d) {
         <label for="f-summary">Summary <span class="req">*</span></label>
         <textarea id="f-summary" placeholder="What is the idea, what problem does it solve, and how would it work?">${esc(d.summary)}</textarea>
         <div class="err">Please describe the idea.</div>
+      </div>
+      <div class="field full">
+        <label for="f-health-benefit">Health Benefit <span class="hint">(optional)</span></label>
+        <textarea id="f-health-benefit" placeholder="Describe any health benefit this idea delivers — e.g. reduced exposure to dust, noise, vibration or manual handling.">${esc(d.healthBenefit || "")}</textarea>
       </div>
       <div class="field">
         <label for="f-discipline">Discipline <span class="req">*</span></label>
@@ -698,11 +686,6 @@ function submissionFormGrid(d) {
         <label for="f-discipline-other">Please specify the discipline <span class="req">*</span></label>
         <input type="text" id="f-discipline-other" placeholder="Describe the discipline" value="${esc(d.disciplineOther || "")}">
         <div class="err">Please specify the discipline.</div>
-      </div>
-      <div class="field" id="field-benefit">
-        <label>Benefit Category <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
-        ${multiSelect("f-benefit", BENEFIT_CATEGORIES, d.benefit, "Select categories…")}
-        <div class="err">Please choose at least one benefit category.</div>
       </div>
       <div class="field" id="field-fsr">
         <label>Related FSR <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
@@ -808,7 +791,7 @@ function submissionCard() {
       <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
       <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
       <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
-      <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
+      <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
       <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
       <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
       <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
@@ -1052,7 +1035,7 @@ function inspectionIdFor() {
 
 /* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
 const STEP_INFO = {
-  submit:   { desc: "The idea is submitted on a single form — idea status, project context, the idea itself, benefit categories, related FSR, file attachments, and any linked PC1 incident. Once it's logged, the idea is tracked from its record by that same status.",
+  submit:   { desc: "The idea is submitted on a single form — idea status, project context, the idea itself, its health benefit, related FSR, file attachments, and any linked PC1 incident. Once it's logged, the idea is tracked from its record by that same status.",
               outcomes: ["Idea is logged with an Initiative ID and its starting status.",
                          "Status moves between Identified, In Progress, Not Feasible and Implemented as the work progresses.",
                          "Action Plan (optional) — owner, due date and comments, marked complete when the work is done.",
@@ -1090,7 +1073,7 @@ function viewRecap(node, state) {
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
         <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
         <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
-        <dt>Benefit category</dt><dd><span class="tags">${(s.benefit || []).map(b => `<span class="tag">${esc(b)}</span>`).join("") || "—"}</span></dd>
+        <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
         <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
         <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
@@ -1142,11 +1125,10 @@ function readDraftFromForm() {
     status: g("f-status") ? g("f-status").value : (idea.draft.status || IDENTIFIED),
     statusReason: g("f-status-reason") ? g("f-status-reason").value : (idea.draft.statusReason || ""),
     siteLocation: g("f-site").value, phase: g("f-phase").value,
-    ideaType: (document.querySelector('input[name="ideaType"]:checked') || {}).value || "new",
     discipline: g("f-discipline").value,
     disciplineOther: g("f-discipline-other") ? g("f-discipline-other").value : (idea.draft.disciplineOther || ""),
     title: g("f-title").value, summary: g("f-summary").value,
-    benefit: [...document.querySelectorAll('[data-msel="f-benefit"] input:checked')].map(c => c.value),
+    healthBenefit: g("f-health-benefit") ? g("f-health-benefit").value : (idea.draft.healthBenefit || ""),
     fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
     fsrOther: g("f-fsr-other") ? g("f-fsr-other").value : (idea.draft.fsrOther || ""),
     attachments: [...(idea.draft.attachments || [])],
@@ -1322,9 +1304,8 @@ function validateSubmissionForm() {
   }
   bad = markInvalid(g("f-title"), !d.title.trim()) || bad;
   bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
-  document.getElementById("field-benefit").classList.toggle("invalid", d.benefit.length === 0);
   document.getElementById("field-fsr").classList.toggle("invalid", d.fsr.length === 0);
-  bad = bad || d.benefit.length === 0 || d.fsr.length === 0;
+  bad = bad || d.fsr.length === 0;
   if (d.fsr.includes("Other") && g("f-fsr-other")) {
     bad = markInvalid(g("f-fsr-other"), !(d.fsrOther || "").trim()) || bad;
   }
@@ -1340,6 +1321,7 @@ function handleSubmitIdea(e) {
   idea.submission = Object.assign({}, d, {
     project: d.project.trim(), submitter: d.submitter.trim(),
     siteLocation: d.siteLocation.trim(), title: d.title.trim(), summary: d.summary.trim(),
+    healthBenefit: (d.healthBenefit || "").trim(),
     disciplineOther: (d.disciplineOther || "").trim(), fsrOther: (d.fsrOther || "").trim(),
     attachments: [...(d.attachments || [])],
     status: d.status || IDENTIFIED,
@@ -1361,10 +1343,11 @@ function handleEditSave(e) {
   const d = idea.draft;
   const prevStatus = idea.submission.status;
   idea.submission = Object.assign({}, idea.submission, {
-    siteLocation: d.siteLocation.trim(), phase: d.phase, ideaType: d.ideaType,
+    siteLocation: d.siteLocation.trim(), phase: d.phase,
     discipline: d.discipline, disciplineOther: (d.disciplineOther || "").trim(),
     title: d.title.trim(), summary: d.summary.trim(),
-    benefit: [...d.benefit], fsr: [...d.fsr], fsrOther: (d.fsrOther || "").trim(),
+    healthBenefit: (d.healthBenefit || "").trim(),
+    fsr: [...d.fsr], fsrOther: (d.fsrOther || "").trim(),
     incident: d.incident, attachments: [...(d.attachments || [])],
     editedAt: nowISO(),
   });
@@ -1430,10 +1413,11 @@ function draftFromSubmission() {
   return {
     project: s.project, submitter: s.submitter, date: s.date,
     status: s.status || IDENTIFIED, statusReason: idea.notFeasible ? idea.notFeasible.reason : "",
-    siteLocation: s.siteLocation, phase: s.phase, ideaType: s.ideaType || "new",
+    siteLocation: s.siteLocation, phase: s.phase,
     discipline: s.discipline, disciplineOther: s.disciplineOther || "",
     title: s.title, summary: s.summary,
-    benefit: [...(s.benefit || [])], fsr: [...(s.fsr || [])], fsrOther: s.fsrOther || "",
+    healthBenefit: s.healthBenefit || "",
+    fsr: [...(s.fsr || [])], fsrOther: s.fsrOther || "",
     attachments: [...(s.attachments || [])], incident: s.incident,
   };
 }
