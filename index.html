@@ -495,8 +495,9 @@ function statusPill(status) {
   return `<span class="pill ${cls}">${esc(status)}</span>`;
 }
 
-/* Status control shown on the idea record and the post-implementation screen —
-   the status set on the submission form is updated from here. */
+/* Status control shown on the Not Feasible screen, which has no editable
+   submission box — everywhere else the status is edited as part of editing
+   the submission itself. */
 function statusCard() {
   const cur = ideaStatus();
   const opts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
@@ -505,7 +506,7 @@ function statusCard() {
     <div class="review-head">
       <div>
         <h2>Idea Status</h2>
-        <p class="sub">Current status ${statusPill(cur)} · set on the submission form, updated here</p>
+        <p class="sub">Current status ${statusPill(cur)} · update it here to reopen the idea</p>
       </div>
     </div>
     <form class="decision-form" id="statusForm" novalidate>
@@ -604,7 +605,7 @@ function viewStage() {
     case S.DRAFT: return viewSubmitForm();
     case S.CONFIRM: return viewConfirm();
     case S.TRACK: return editing ? viewEditForm() : viewTracking();
-    case S.POST: return viewPostForm();
+    case S.POST: return editing ? viewEditForm() : viewPostForm();
     case S.COMPLETE: return viewComplete();
     case S.FEEDBACK: return viewFeedback();
     case S.CLOSED: return viewClosed();
@@ -764,7 +765,6 @@ function viewConfirm() {
 function viewTracking() {
   return `
   ${submissionCard()}
-  ${statusCard()}
   ${actionPlanCard()}
   ${commentsCard()}`;
 }
@@ -880,7 +880,6 @@ function viewPostForm() {
   const ap = idea.actionPlan;
   return `
   ${originalCard("Marked Implemented — record the outcome to close this idea out.")}
-  ${statusCard()}
   <form class="card" id="pifForm" novalidate>
     <h2>Post-Implementation Form</h2>
     <p class="sub">${ap ? `Action Plan ${esc(ap.inspectionId)}${ap.completedAt ? ` marked complete ${fmtDate(ap.completedAt)}` : " is on this idea"}.` : "No Action Plan was raised for this idea."}</p>
@@ -977,9 +976,14 @@ function originalCard(note) {
   const s = idea.submission;
   return `
   <div class="card">
-    <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
-    <p class="sub">${statusPill(s.status)} · ${esc(note)}</p>
-    <div class="summary-block" style="margin-bottom:0">${esc(s.summary)}</div>
+    <div class="review-head">
+      <div>
+        <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
+        <p class="sub" style="margin:0">${statusPill(s.status)} · ${esc(note)}</p>
+      </div>
+      <button type="button" class="btn btn-teal-outline btn-sm" data-act="edit-submission">✎ Edit submission</button>
+    </div>
+    <div class="summary-block" style="margin-bottom:0;margin-top:.9rem">${esc(s.summary)}</div>
   </div>`;
 }
 
