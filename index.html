@@ -140,6 +140,21 @@
   .msel-panel label:hover{background:var(--soft)}
   .msel-panel input{accent-color:var(--teal);width:15px;height:15px}
   .field.invalid .msel-toggle{border-color:var(--red)}
+
+  /* Searchable single-select dropdown (shares the msel toggle/panel look) */
+  .ssel{position:relative}
+  .ssel.open .msel-caret{transform:rotate(180deg)}
+  .ssel.open .msel-toggle{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+  .ssel-panel{padding:0;overflow:hidden;max-height:none}
+  .ssel-search-wrap{padding:.4rem;border-bottom:1px solid var(--line)}
+  .ssel-panel input.ssel-search{width:100%;height:auto;accent-color:auto;border:1px solid var(--input-line);border-radius:5px;padding:.45rem .6rem;background:#fff}
+  .ssel-panel input.ssel-search:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+  .ssel-list{overflow-y:auto;max-height:230px;padding:.35rem;display:grid;gap:.1rem}
+  .ssel-opt{display:block;width:100%;text-align:left;border:none;background:none;font-size:.86rem;font-weight:500;padding:.4rem .5rem;border-radius:5px;color:var(--ink)}
+  .ssel-opt:hover{background:var(--soft)}
+  .ssel-opt[hidden]{display:none}
+  .ssel-opt.sel{background:var(--teal-soft);color:var(--teal-dark);font-weight:700}
+  .ssel-empty{font-size:.82rem;color:var(--muted);padding:.45rem .55rem}
   .form-actions{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--line);flex-wrap:wrap}
   .form-actions .right{display:flex;gap:.75rem;margin-left:auto}
 
@@ -257,7 +272,36 @@ const PROFILE = { name: "Jake Anderson", project: "Fremantle Bridges Alliance" }
 
 const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Handover"];
 
-const DISCIPLINES = ["Civils", "Structural", "Building", "Other"];
+const DISCIPLINES = [
+  "Other",
+  "General",
+  "Foundations and Piles",
+  "In Situ Concrete",
+  "Demolition and Site Clearance",
+  "Earthworks",
+  "Finishes & FF&E",
+  "Ground Investigation and Geotechnical",
+  "Precast Concrete",
+  "Hydraulics / Plumbing",
+  "Fencing",
+  "Waterproofing",
+  "Electrical & Communication",
+  "Mechanical",
+  "Tunnels",
+  "Fire (Wet and Dry Systems)",
+  "Pipework – Inground Water Supply Infrastructure",
+  "Signalling",
+  "Roads and Paving",
+  "Structural Steel",
+  "Rail and Track",
+  "Utilities",
+  "Envelope Works",
+  "OHW",
+  "External Works",
+  "Drainage",
+  "CSR",
+  "Contingency R&O",
+];
 
 const FSR_CATEGORIES = [
   "Plant & Equipment", "Cranes & Lifting", "Excavation", "Piling",
@@ -330,7 +374,7 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "FBA North", phase: "Construction", discipline: "Structural",
+      siteLocation: "FBA North", phase: "Construction", discipline: "Precast Concrete",
       disciplineOther: "",
       status: IDENTIFIED,
       title: "Use of precast viaduct structures constructed at ground level.",
@@ -629,12 +673,36 @@ function multiSelect(id, options, selected, placeholder) {
   </div>`;
 }
 
+/* Searchable single-select dropdown for the Discipline field — a toggle that
+   opens a panel with a search box at the top and the option list beneath it.
+   The hidden #f-discipline input carries the value so the shared form helpers
+   (readDraftFromForm, validation, the "Other" toggle) work unchanged. */
+function disciplineSelect(value) {
+  const opts = DISCIPLINES.map(o => `
+      <button type="button" class="ssel-opt${value === o ? " sel" : ""}" role="option" aria-selected="${value === o}" data-value="${esc(o)}">${esc(o)}</button>`).join("");
+  return `
+  <div class="ssel" data-ssel="f-discipline">
+    <input type="hidden" id="f-discipline" value="${esc(value || "")}">
+    <button type="button" class="msel-toggle" aria-haspopup="listbox" aria-expanded="false">
+      <span class="msel-summary ${value ? "" : "ph"}">${esc(value || "Select discipline…")}</span>
+      <span class="msel-caret"></span>
+    </button>
+    <div class="msel-panel ssel-panel" hidden>
+      <div class="ssel-search-wrap">
+        <input type="search" class="ssel-search" placeholder="Search disciplines…" aria-label="Search disciplines">
+      </div>
+      <div class="ssel-list" role="listbox">${opts}
+        <div class="ssel-empty" hidden>No matching discipline.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* Shared field grid used by both the submission form and the ESL Lead's
    inline edit form. Field IDs are identical in both so the same
    readDraftFromForm / validation helpers drive them. */
 function submissionFormGrid(d) {
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
-  const disciplineOpts = DISCIPLINES.map(p => `<option ${d.discipline === p ? "selected" : ""}>${esc(p)}</option>`).join("");
   const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
   const statusOpts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${d.status === s ? "selected" : ""}>${esc(s)}</option>`).join("");
 
@@ -677,10 +745,8 @@ function submissionFormGrid(d) {
         <textarea id="f-health-benefit" placeholder="Describe any health benefit this idea delivers — e.g. reduced exposure to dust, noise, vibration or manual handling.">${esc(d.healthBenefit || "")}</textarea>
       </div>
       <div class="field">
-        <label for="f-discipline">Discipline <span class="req">*</span></label>
-        <select id="f-discipline">
-          <option value="" ${d.discipline ? "" : "selected"}>Select discipline…</option>${disciplineOpts}
-        </select>
+        <label>Discipline <span class="req">*</span></label>
+        ${disciplineSelect(d.discipline)}
         <div class="err">Please select the discipline.</div>
       </div>
       <div class="field full" id="field-discipline-other" ${d.discipline === "Other" ? "" : "hidden"}>
@@ -1165,6 +1231,7 @@ function bindStage() {
   const editForm = document.getElementById("editForm");
   if (editForm) editForm.onsubmit = handleEditSave;
   bindMultiSelects();
+  bindDisciplineSelect();
   bindOtherToggles();
   bindAttachments();
   bindStatusForm();
@@ -1211,6 +1278,69 @@ function bindMultiSelects() {
       });
     });
     bindMultiSelects._docBound = true;
+  }
+}
+
+/* Wire up the searchable Discipline dropdown: open/close, live filtering from
+   the search box, and picking an option — which updates the hidden input and
+   fires a change event so autosave and the "Other" toggle react as before. */
+function bindDisciplineSelect() {
+  const ssel = $stage.querySelector('[data-ssel="f-discipline"]');
+  if (!ssel) return;
+  const hidden = ssel.querySelector("#f-discipline");
+  const toggle = ssel.querySelector(".msel-toggle");
+  const panel = ssel.querySelector(".ssel-panel");
+  const summary = ssel.querySelector(".msel-summary");
+  const search = ssel.querySelector(".ssel-search");
+  const empty = ssel.querySelector(".ssel-empty");
+  const opts = [...ssel.querySelectorAll(".ssel-opt")];
+  const filter = () => {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    opts.forEach(o => {
+      const hit = !q || o.dataset.value.toLowerCase().includes(q);
+      o.hidden = !hit;
+      if (hit) shown++;
+    });
+    empty.hidden = shown > 0;
+  };
+  const close = () => {
+    ssel.classList.remove("open");
+    panel.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+  };
+  toggle.addEventListener("click", () => {
+    const open = ssel.classList.toggle("open");
+    panel.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    if (open) { search.value = ""; filter(); search.focus(); }
+  });
+  search.addEventListener("input", filter);
+  ssel.addEventListener("keydown", e => {
+    if (e.key === "Escape" && ssel.classList.contains("open")) { close(); toggle.focus(); }
+  });
+  opts.forEach(o => o.addEventListener("click", () => {
+    hidden.value = o.dataset.value;
+    opts.forEach(x => {
+      x.classList.toggle("sel", x === o);
+      x.setAttribute("aria-selected", String(x === o));
+    });
+    summary.textContent = o.dataset.value;
+    summary.classList.remove("ph");
+    close();
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+  }));
+  if (!bindDisciplineSelect._docBound) {
+    document.addEventListener("click", e => {
+      document.querySelectorAll(".ssel.open").forEach(m => {
+        if (!m.contains(e.target)) {
+          m.classList.remove("open");
+          m.querySelector(".ssel-panel").hidden = true;
+          m.querySelector(".msel-toggle").setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+    bindDisciplineSelect._docBound = true;
   }
 }
 
