@@ -312,14 +312,6 @@ const FSR_CATEGORIES = [
   "Precast Concrete", "Demolition", "Other",
 ];
 
-const PC1_INCIDENTS = [
-  { id: "EVT-2026-0041", label: "EVT-2026-0041 · Dropped scaffold tube, North Pylon" },
-  { id: "EVT-2026-0087", label: "EVT-2026-0087 · Excavator near-miss with live cable" },
-  { id: "EVT-2026-0102", label: "EVT-2026-0102 · Uncontrolled load swing during girder lift" },
-  { id: "EVT-2026-0139", label: "EVT-2026-0139 · Stored energy release, hydraulic line" },
-  { id: "EVT-2026-0155", label: "EVT-2026-0155 · Worker in exclusion zone during reversing" },
-];
-
 /* Idea status — set on the submission form and updated by either role while
    the idea is tracked. The status is what drives the workflow. */
 const IDENTIFIED = "Identified";
@@ -383,7 +375,6 @@ function freshIdea() {
       fsr: ["Falls & Dropped Objects", "Formwork & Falsework"],
       fsrOther: "",
       attachments: [],
-      incident: "",
     },
     submission: null,      // frozen copy on submit
     actionPlan: null,      // optional — added from the idea record
@@ -703,7 +694,6 @@ function disciplineSelect(value) {
    readDraftFromForm / validation helpers drive them. */
 function submissionFormGrid(d) {
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
-  const incidentOpts = PC1_INCIDENTS.map(e => `<option value="${e.id}" ${d.incident === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("");
   const statusOpts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${d.status === s ? "selected" : ""}>${esc(s)}</option>`).join("");
 
   return `
@@ -763,12 +753,6 @@ function submissionFormGrid(d) {
         <label for="f-fsr-other">Please specify the other FSR <span class="req">*</span></label>
         <input type="text" id="f-fsr-other" placeholder="Describe the related FSR" value="${esc(d.fsrOther || "")}">
         <div class="err">Please specify the other FSR.</div>
-      </div>
-      <div class="field">
-        <label for="f-incident">Linked Event <span class="hint">(optional)</span></label>
-        <select id="f-incident">
-          <option value="" ${d.incident ? "" : "selected"}>No linked incident</option>${incidentOpts}
-        </select>
       </div>
       <div class="field full">
         <label for="f-files">Attachments <span class="hint">(optional)</span></label>
@@ -859,7 +843,6 @@ function submissionCard() {
       <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
       <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
       <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
-      <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
       <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
     </div>
   </div>`;
@@ -1074,10 +1057,6 @@ function commentsCard(readOnly) {
   </div>`;
 }
 
-function pc1Label(id) {
-  const e = PC1_INCIDENTS.find(x => x.id === id);
-  return e ? e.label : id;
-}
 /* Discipline / FSR display with the "Other" free-text spelled out */
 function disciplineDisplay(s) {
   return s.discipline === "Other" && s.disciplineOther ? `Other — ${s.disciplineOther}` : s.discipline;
@@ -1105,7 +1084,7 @@ function inspectionIdFor() {
 
 /* ---------- Tracker peeks: recap of done steps / preview of next steps ---------- */
 const STEP_INFO = {
-  submit:   { desc: "The idea is submitted on a single form — idea status, project context, the idea itself, its health benefit, related FSR, file attachments, and any linked PC1 incident. Once it's logged, the idea is tracked from its record by that same status.",
+  submit:   { desc: "The idea is submitted on a single form — idea status, project context, the idea itself, its health benefit, related FSR, and file attachments. Once it's logged, the idea is tracked from its record by that same status.",
               outcomes: ["Idea is logged with an Initiative ID and its starting status.",
                          "Status moves between Identified, In Progress, Not Feasible and Implemented as the work progresses.",
                          "Action Plan (optional) — owner, due date and comments, marked complete when the work is done.",
@@ -1145,7 +1124,6 @@ function viewRecap(node, state) {
         <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
         <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
         <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
-        <dt>Linked PC1 incident</dt><dd>${s.incident ? esc(pc1Label(s.incident)) : "None"}</dd>
         <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
         ${ap ? `
         <dt>Action plan</dt><dd>${esc(ap.inspectionId)} · ${esc(ap.personResponsible)} · due ${fmtDate(ap.dueDate)} · ${ap.completedAt ? "complete" : "in progress"}</dd>
@@ -1202,7 +1180,6 @@ function readDraftFromForm() {
     fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
     fsrOther: g("f-fsr-other") ? g("f-fsr-other").value : (idea.draft.fsrOther || ""),
     attachments: [...(idea.draft.attachments || [])],
-    incident: g("f-incident").value,
   };
 }
 
@@ -1482,7 +1459,7 @@ function handleEditSave(e) {
     title: d.title.trim(), summary: d.summary.trim(),
     healthBenefit: (d.healthBenefit || "").trim(),
     fsr: [...d.fsr], fsrOther: (d.fsrOther || "").trim(),
-    incident: d.incident, attachments: [...(d.attachments || [])],
+    attachments: [...(d.attachments || [])],
     editedAt: nowISO(),
   });
   editing = false;
@@ -1552,7 +1529,7 @@ function draftFromSubmission() {
     title: s.title, summary: s.summary,
     healthBenefit: s.healthBenefit || "",
     fsr: [...(s.fsr || [])], fsrOther: s.fsrOther || "",
-    attachments: [...(s.attachments || [])], incident: s.incident,
+    attachments: [...(s.attachments || [])],
   };
 }
 
