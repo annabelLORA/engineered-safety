@@ -142,19 +142,6 @@
   .field.invalid .msel-toggle{border-color:var(--red)}
 
   /* Searchable single-select dropdown (shares the msel toggle/panel look) */
-  .ssel{position:relative}
-  .ssel.open .msel-caret{transform:rotate(180deg)}
-  .ssel.open .msel-toggle{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
-  .ssel-panel{padding:0;overflow:hidden;max-height:none}
-  .ssel-search-wrap{padding:.4rem;border-bottom:1px solid var(--line)}
-  .ssel-panel input.ssel-search{width:100%;height:auto;accent-color:auto;border:1px solid var(--input-line);border-radius:5px;padding:.45rem .6rem;background:#fff}
-  .ssel-panel input.ssel-search:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
-  .ssel-list{overflow-y:auto;max-height:230px;padding:.35rem;display:grid;gap:.1rem}
-  .ssel-opt{display:block;width:100%;text-align:left;border:none;background:none;font-size:.86rem;font-weight:500;padding:.4rem .5rem;border-radius:5px;color:var(--ink)}
-  .ssel-opt:hover{background:var(--soft)}
-  .ssel-opt[hidden]{display:none}
-  .ssel-opt.sel{background:var(--teal-soft);color:var(--teal-dark);font-weight:700}
-  .ssel-empty{font-size:.82rem;color:var(--muted);padding:.45rem .55rem}
   .form-actions{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--line);flex-wrap:wrap}
   .form-actions .right{display:flex;gap:.75rem;margin-left:auto}
 
@@ -272,36 +259,7 @@ const PROFILE = { name: "Jake Anderson", project: "Fremantle Bridges Alliance" }
 
 const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Handover"];
 
-const DISCIPLINES = [
-  "Other",
-  "General",
-  "Foundations and Piles",
-  "In Situ Concrete",
-  "Demolition and Site Clearance",
-  "Earthworks",
-  "Finishes & FF&E",
-  "Ground Investigation and Geotechnical",
-  "Precast Concrete",
-  "Hydraulics / Plumbing",
-  "Fencing",
-  "Waterproofing",
-  "Electrical & Communication",
-  "Mechanical",
-  "Tunnels",
-  "Fire (Wet and Dry Systems)",
-  "Pipework – Inground Water Supply Infrastructure",
-  "Signalling",
-  "Roads and Paving",
-  "Structural Steel",
-  "Rail and Track",
-  "Utilities",
-  "Envelope Works",
-  "OHW",
-  "External Works",
-  "Drainage",
-  "CSR",
-  "Contingency R&O",
-];
+const SITE_LOCATIONS = ["FBA North", "FBA South", "FBA East", "FBA West"];
 
 const FSR_CATEGORIES = [
   "Plant & Equipment", "Cranes & Lifting", "Excavation", "Piling",
@@ -366,10 +324,8 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "FBA North", phase: "Construction", discipline: "Precast Concrete",
-      disciplineOther: "",
+      siteLocation: "FBA North", phase: "Construction",
       status: IDENTIFIED,
-      title: "Use of precast viaduct structures constructed at ground level.",
       summary: "Maximising the use of precast concrete bridge piers and modular spans, which are assembled off-site and craned into place during scheduled short-term network closures. Drastically reduces high-risk construction hours over water, mitigates environmental spill risks, and significantly limits disruption to critical transport arteries.",
       healthBenefit: "Moves formwork and concrete finishing to a controlled ground-level yard, cutting workers' exposure to work at height, manual handling strain, and silica dust over water.",
       fsr: ["Falls & Dropped Objects", "Formwork & Falsework"],
@@ -412,10 +368,8 @@ function saveProjectForLater(opts) {
   const list = loadSavedProjects();
   list.push({
     id: idea.id,
-    title: s.title,
     summary: s.summary,
     project: s.project,
-    discipline: s.discipline,
     healthBenefit: s.healthBenefit,
     fsr: s.fsr,
     decidedBy: nf ? nf.role : "",
@@ -664,40 +618,22 @@ function multiSelect(id, options, selected, placeholder) {
   </div>`;
 }
 
-/* Searchable single-select dropdown for the Discipline field — a toggle that
-   opens a panel with a search box at the top and the option list beneath it.
-   The hidden #f-discipline input carries the value so the shared form helpers
-   (readDraftFromForm, validation, the "Other" toggle) work unchanged. */
-function disciplineSelect(value) {
-  const opts = DISCIPLINES.map(o => `
-      <button type="button" class="ssel-opt${value === o ? " sel" : ""}" role="option" aria-selected="${value === o}" data-value="${esc(o)}">${esc(o)}</button>`).join("");
-  return `
-  <div class="ssel" data-ssel="f-discipline">
-    <input type="hidden" id="f-discipline" value="${esc(value || "")}">
-    <button type="button" class="msel-toggle" aria-haspopup="listbox" aria-expanded="false">
-      <span class="msel-summary ${value ? "" : "ph"}">${esc(value || "Select discipline…")}</span>
-      <span class="msel-caret"></span>
-    </button>
-    <div class="msel-panel ssel-panel" hidden>
-      <div class="ssel-search-wrap">
-        <input type="search" class="ssel-search" placeholder="Search disciplines…" aria-label="Search disciplines">
-      </div>
-      <div class="ssel-list" role="listbox">${opts}
-        <div class="ssel-empty" hidden>No matching discipline.</div>
-      </div>
-    </div>
-  </div>`;
-}
-
 /* Shared field grid used by both the submission form and the ESL Lead's
    inline edit form. Field IDs are identical in both so the same
    readDraftFromForm / validation helpers drive them. */
 function submissionFormGrid(d) {
+  const siteOpts = SITE_LOCATIONS.map(l => `<option value="${esc(l)}" ${d.siteLocation === l ? "selected" : ""}>${esc(l)}</option>`).join("");
   const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
   const statusOpts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${d.status === s ? "selected" : ""}>${esc(s)}</option>`).join("");
 
   return `
     <div class="form-grid">
+      <div class="field full">
+        <label for="f-files">Attachments <span class="hint">(optional)</span></label>
+        <input type="file" id="f-files" multiple>
+        <div class="help">Attach supporting documents, drawings, or photos.</div>
+        <ul id="attach-list" class="attach-list"></ul>
+      </div>
       <div class="field full">
         <label for="f-status">Status <span class="req">*</span></label>
         <select id="f-status" style="max-width:320px">${statusOpts}</select>
@@ -710,8 +646,10 @@ function submissionFormGrid(d) {
       </div>
       <div class="field">
         <label for="f-site">Site Location <span class="req">*</span></label>
-        <input type="text" id="f-site" placeholder="e.g. North Pylon Pier 3" value="${esc(d.siteLocation)}">
-        <div class="err">Please enter the site location.</div>
+        <select id="f-site">
+          <option value="" ${d.siteLocation ? "" : "selected"}>Select location…</option>${siteOpts}
+        </select>
+        <div class="err">Please select the site location.</div>
       </div>
       <div class="field">
         <label for="f-phase">Applicable Phase <span class="req">*</span></label>
@@ -719,11 +657,6 @@ function submissionFormGrid(d) {
           <option value="" ${d.phase ? "" : "selected"}>Select phase…</option>${phaseOpts}
         </select>
         <div class="err">Please select the applicable phase.</div>
-      </div>
-      <div class="field full">
-        <label for="f-title">Idea Title <span class="req">*</span></label>
-        <input type="text" id="f-title" maxlength="120" placeholder="Short, descriptive name for the idea" value="${esc(d.title)}">
-        <div class="err">Please give the idea a title.</div>
       </div>
       <div class="field full">
         <label for="f-summary">Summary <span class="req">*</span></label>
@@ -734,16 +667,6 @@ function submissionFormGrid(d) {
         <label for="f-health-benefit">Health Benefit <span class="hint">(optional)</span></label>
         <textarea id="f-health-benefit" placeholder="Describe any health benefit this idea delivers — e.g. reduced exposure to dust, noise, vibration or manual handling.">${esc(d.healthBenefit || "")}</textarea>
       </div>
-      <div class="field">
-        <label>Discipline <span class="req">*</span></label>
-        ${disciplineSelect(d.discipline)}
-        <div class="err">Please select the discipline.</div>
-      </div>
-      <div class="field full" id="field-discipline-other" ${d.discipline === "Other" ? "" : "hidden"}>
-        <label for="f-discipline-other">Please specify the discipline <span class="req">*</span></label>
-        <input type="text" id="f-discipline-other" placeholder="Describe the discipline" value="${esc(d.disciplineOther || "")}">
-        <div class="err">Please specify the discipline.</div>
-      </div>
       <div class="field" id="field-fsr">
         <label>Related FSR <span class="req">*</span> <span class="hint">(select all that apply)</span></label>
         ${multiSelect("f-fsr", FSR_CATEGORIES, d.fsr, "Select related FSR…")}
@@ -753,12 +676,6 @@ function submissionFormGrid(d) {
         <label for="f-fsr-other">Please specify the other FSR <span class="req">*</span></label>
         <input type="text" id="f-fsr-other" placeholder="Describe the related FSR" value="${esc(d.fsrOther || "")}">
         <div class="err">Please specify the other FSR.</div>
-      </div>
-      <div class="field full">
-        <label for="f-files">Attachments <span class="hint">(optional)</span></label>
-        <input type="file" id="f-files" multiple>
-        <div class="help">Attach supporting documents, drawings, or photos.</div>
-        <ul id="attach-list" class="attach-list"></ul>
       </div>
     </div>`;
 }
@@ -800,7 +717,7 @@ function viewConfirm() {
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h2>Idea submitted</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(s.title)}</strong> has been logged as ${statusPill(s.status)}.</p>
+    <p>Your idea has been logged as ${statusPill(s.status)}.</p>
     <ol class="flow">
       <li><span class="n">1</span><div class="t"><b>Submission</b><span>The idea is on record with its status. Update the status as the work moves along, edit the detail, and add an Action Plan if the team wants one.</span></div></li>
       <li><span class="n">2</span><div class="t"><b>Post-Implementation</b><span>Setting the status to Implemented opens the Post-Implementation Form to close the idea out.</span></div></li>
@@ -826,21 +743,19 @@ function submissionCard() {
   <div class="card">
     <div class="review-head">
       <div>
-        <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
+        <h2><span class="iid">${idea.id}</span></h2>
         <p class="sub">Submitted by ${esc(s.submitter)} · ${fmtDate(s.submittedAt)}${s.editedAt ? " · edited " + fmtDate(s.editedAt) : ""} · ${statusPill(s.status)}</p>
       </div>
       <button type="button" class="btn btn-teal-outline btn-sm" data-act="edit-submission">✎ Edit submission</button>
     </div>
     <div class="summary-block">${esc(s.summary)}</div>
     <div class="kv">
-      <dt>Idea title</dt><dd>${esc(s.title)}</dd>
       <dt>Status</dt><dd>${statusPill(s.status)}</dd>
       <dt>Project</dt><dd>${esc(s.project)}</dd>
       <dt>Submitted by</dt><dd>${esc(s.submitter)}</dd>
       <dt>Date</dt><dd>${fmtDate(s.date)}</dd>
       <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
       <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-      <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
       <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
       <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
       <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
@@ -967,7 +882,7 @@ function viewComplete() {
     <div class="mark ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h2>Initiative complete</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(idea.submission.title)}</strong> is ${statusPill(IMPLEMENTED)} and closed out. The post-implementation review is on record.</p>
+    <p>This idea is ${statusPill(IMPLEMENTED)} and closed out. The post-implementation review is on record.</p>
   </div>
   <div class="card">
     <h2>Post-Implementation Review</h2>
@@ -989,7 +904,7 @@ function viewFeedback() {
   const nf = idea.notFeasible || {};
   return `
   <div class="card">
-    <h2><span class="iid">${idea.id}</span> · ${esc(idea.submission.title)}</h2>
+    <h2><span class="iid">${idea.id}</span></h2>
     <p class="sub">This idea was marked ${statusPill(NOT_FEASIBLE)} by ${esc(nf.by || actorName())} on ${fmtDate(nf.at)}. The reason below is on record.</p>
     <div class="callout red"><strong>Reason:</strong> ${esc(nf.reason || "No reason recorded.")}</div>
     <div style="margin-top:1rem">${statusHistoryHtml()}</div>
@@ -1011,7 +926,7 @@ function viewClosed() {
     <div class="mark bad"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></div>
     <h2>Initiative closed — not feasible</h2>
     <div class="iid">${idea.id}</div>
-    <p><strong>${esc(idea.submission.title)}</strong> is closed out with the reason on record. Rework the idea and submit it again any time.</p>
+    <p>This idea is closed out with the reason on record. Rework the idea and submit it again any time.</p>
     <div class="hero-actions">
       <button class="btn btn-ghost" data-act="save-for-later" ${idea.savedForLater ? "disabled" : ""}>${idea.savedForLater ? "✓ Saved for Future Projects" : "Save for Future Projects"}</button>
       <button class="btn btn-red" data-act="restart">Start a New Idea →</button>
@@ -1027,7 +942,7 @@ function originalCard(note) {
   <div class="card">
     <div class="review-head">
       <div>
-        <h2><span class="iid">${idea.id}</span> · ${esc(s.title)}</h2>
+        <h2><span class="iid">${idea.id}</span></h2>
         <p class="sub" style="margin:0">${statusPill(s.status)} · ${esc(note)}</p>
       </div>
       <button type="button" class="btn btn-teal-outline btn-sm" data-act="edit-submission">✎ Edit submission</button>
@@ -1057,10 +972,7 @@ function commentsCard(readOnly) {
   </div>`;
 }
 
-/* Discipline / FSR display with the "Other" free-text spelled out */
-function disciplineDisplay(s) {
-  return s.discipline === "Other" && s.disciplineOther ? `Other — ${s.disciplineOther}` : s.discipline;
-}
+/* FSR display with the "Other" free-text spelled out */
 function fsrDisplay(s) {
   return (s.fsr || []).map(f => f === "Other" && s.fsrOther ? `Other — ${s.fsrOther}` : f);
 }
@@ -1115,13 +1027,11 @@ function viewRecap(node, state) {
     body = `
       <div class="summary-block">${esc(s.summary)}</div>
       <div class="kv">
-        <dt>Idea title</dt><dd>${esc(s.title)}</dd>
         <dt>Status</dt><dd>${statusPill(s.status)}</dd>
         <dt>Project</dt><dd>${esc(s.project)}</dd>
         <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
         <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-        <dt>Discipline</dt><dd>${esc(disciplineDisplay(s)) || "—"}</dd>
         <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
         <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
@@ -1166,16 +1076,14 @@ function markInvalid(input, bad) {
 
 function readDraftFromForm() {
   const g = id => document.getElementById(id);
-  if (!g("f-title")) return;
+  if (!g("f-site")) return;
   idea.draft = {
     project: idea.draft.project, submitter: idea.draft.submitter,
     date: idea.draft.date,
     status: g("f-status") ? g("f-status").value : (idea.draft.status || IDENTIFIED),
     statusReason: g("f-status-reason") ? g("f-status-reason").value : (idea.draft.statusReason || ""),
     siteLocation: g("f-site").value, phase: g("f-phase").value,
-    discipline: g("f-discipline").value,
-    disciplineOther: g("f-discipline-other") ? g("f-discipline-other").value : (idea.draft.disciplineOther || ""),
-    title: g("f-title").value, summary: g("f-summary").value,
+    summary: g("f-summary").value,
     healthBenefit: g("f-health-benefit") ? g("f-health-benefit").value : (idea.draft.healthBenefit || ""),
     fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
     fsrOther: g("f-fsr-other") ? g("f-fsr-other").value : (idea.draft.fsrOther || ""),
@@ -1208,7 +1116,6 @@ function bindStage() {
   const editForm = document.getElementById("editForm");
   if (editForm) editForm.onsubmit = handleEditSave;
   bindMultiSelects();
-  bindDisciplineSelect();
   bindOtherToggles();
   bindAttachments();
   bindStatusForm();
@@ -1258,71 +1165,8 @@ function bindMultiSelects() {
   }
 }
 
-/* Wire up the searchable Discipline dropdown: open/close, live filtering from
-   the search box, and picking an option — which updates the hidden input and
-   fires a change event so autosave and the "Other" toggle react as before. */
-function bindDisciplineSelect() {
-  const ssel = $stage.querySelector('[data-ssel="f-discipline"]');
-  if (!ssel) return;
-  const hidden = ssel.querySelector("#f-discipline");
-  const toggle = ssel.querySelector(".msel-toggle");
-  const panel = ssel.querySelector(".ssel-panel");
-  const summary = ssel.querySelector(".msel-summary");
-  const search = ssel.querySelector(".ssel-search");
-  const empty = ssel.querySelector(".ssel-empty");
-  const opts = [...ssel.querySelectorAll(".ssel-opt")];
-  const filter = () => {
-    const q = search.value.trim().toLowerCase();
-    let shown = 0;
-    opts.forEach(o => {
-      const hit = !q || o.dataset.value.toLowerCase().includes(q);
-      o.hidden = !hit;
-      if (hit) shown++;
-    });
-    empty.hidden = shown > 0;
-  };
-  const close = () => {
-    ssel.classList.remove("open");
-    panel.hidden = true;
-    toggle.setAttribute("aria-expanded", "false");
-  };
-  toggle.addEventListener("click", () => {
-    const open = ssel.classList.toggle("open");
-    panel.hidden = !open;
-    toggle.setAttribute("aria-expanded", String(open));
-    if (open) { search.value = ""; filter(); search.focus(); }
-  });
-  search.addEventListener("input", filter);
-  ssel.addEventListener("keydown", e => {
-    if (e.key === "Escape" && ssel.classList.contains("open")) { close(); toggle.focus(); }
-  });
-  opts.forEach(o => o.addEventListener("click", () => {
-    hidden.value = o.dataset.value;
-    opts.forEach(x => {
-      x.classList.toggle("sel", x === o);
-      x.setAttribute("aria-selected", String(x === o));
-    });
-    summary.textContent = o.dataset.value;
-    summary.classList.remove("ph");
-    close();
-    hidden.dispatchEvent(new Event("change", { bubbles: true }));
-  }));
-  if (!bindDisciplineSelect._docBound) {
-    document.addEventListener("click", e => {
-      document.querySelectorAll(".ssel.open").forEach(m => {
-        if (!m.contains(e.target)) {
-          m.classList.remove("open");
-          m.querySelector(".ssel-panel").hidden = true;
-          m.querySelector(".msel-toggle").setAttribute("aria-expanded", "false");
-        }
-      });
-    });
-    bindDisciplineSelect._docBound = true;
-  }
-}
-
-/* Reveal a free-text "please specify" field whenever "Other" is chosen, for
-   both the Discipline select and the Related FSR multiselect. */
+/* Reveal a free-text "please specify" field whenever "Other" is chosen in
+   the Related FSR multiselect. */
 function bindOtherToggles() {
   const st = document.getElementById("f-status");
   const stReason = document.getElementById("field-status-reason-form");
@@ -1333,12 +1177,6 @@ function bindOtherToggles() {
       if (stNote) stNote.textContent = STATUS_NOTE[st.value] || "";
     };
     st.addEventListener("change", t); t();
-  }
-  const disc = document.getElementById("f-discipline");
-  const discOther = document.getElementById("field-discipline-other");
-  if (disc && discOther) {
-    const t = () => { discOther.hidden = disc.value !== "Other"; };
-    disc.addEventListener("change", t); t();
   }
   const fsrMsel = $stage.querySelector('[data-msel="f-fsr"]');
   const fsrOther = document.getElementById("field-fsr-other");
@@ -1407,13 +1245,8 @@ function validateSubmissionForm() {
   if (d.status === NOT_FEASIBLE && g("f-status-reason")) {
     bad = markInvalid(g("f-status-reason"), !(d.statusReason || "").trim()) || bad;
   }
-  bad = markInvalid(g("f-site"), !d.siteLocation.trim()) || bad;
+  bad = markInvalid(g("f-site"), !d.siteLocation) || bad;
   bad = markInvalid(g("f-phase"), !d.phase) || bad;
-  bad = markInvalid(g("f-discipline"), !d.discipline) || bad;
-  if (d.discipline === "Other" && g("f-discipline-other")) {
-    bad = markInvalid(g("f-discipline-other"), !(d.disciplineOther || "").trim()) || bad;
-  }
-  bad = markInvalid(g("f-title"), !d.title.trim()) || bad;
   bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
   document.getElementById("field-fsr").classList.toggle("invalid", d.fsr.length === 0);
   bad = bad || d.fsr.length === 0;
@@ -1431,9 +1264,9 @@ function handleSubmitIdea(e) {
   if (!idea.id) idea.id = nextInitiativeId();
   idea.submission = Object.assign({}, d, {
     project: d.project.trim(), submitter: d.submitter.trim(),
-    siteLocation: d.siteLocation.trim(), title: d.title.trim(), summary: d.summary.trim(),
+    siteLocation: d.siteLocation, summary: d.summary.trim(),
     healthBenefit: (d.healthBenefit || "").trim(),
-    disciplineOther: (d.disciplineOther || "").trim(), fsrOther: (d.fsrOther || "").trim(),
+    fsrOther: (d.fsrOther || "").trim(),
     attachments: [...(d.attachments || [])],
     status: d.status || IDENTIFIED,
     submittedAt: nowISO(),
@@ -1454,9 +1287,8 @@ function handleEditSave(e) {
   const d = idea.draft;
   const prevStatus = idea.submission.status;
   idea.submission = Object.assign({}, idea.submission, {
-    siteLocation: d.siteLocation.trim(), phase: d.phase,
-    discipline: d.discipline, disciplineOther: (d.disciplineOther || "").trim(),
-    title: d.title.trim(), summary: d.summary.trim(),
+    siteLocation: d.siteLocation, phase: d.phase,
+    summary: d.summary.trim(),
     healthBenefit: (d.healthBenefit || "").trim(),
     fsr: [...d.fsr], fsrOther: (d.fsrOther || "").trim(),
     attachments: [...(d.attachments || [])],
@@ -1525,8 +1357,7 @@ function draftFromSubmission() {
     project: s.project, submitter: s.submitter, date: s.date,
     status: s.status || IDENTIFIED, statusReason: idea.notFeasible ? idea.notFeasible.reason : "",
     siteLocation: s.siteLocation, phase: s.phase,
-    discipline: s.discipline, disciplineOther: s.disciplineOther || "",
-    title: s.title, summary: s.summary,
+    summary: s.summary,
     healthBenefit: s.healthBenefit || "",
     fsr: [...(s.fsr || [])], fsrOther: s.fsrOther || "",
     attachments: [...(s.attachments || [])],
