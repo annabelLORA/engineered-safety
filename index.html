@@ -257,7 +257,6 @@
 ============================================================= */
 const PROFILE = { name: "Jake Anderson", project: "Fremantle Bridges Alliance" };
 
-const PHASES = ["Design", "Procurement", "Construction", "Commissioning", "Handover"];
 
 const SITE_LOCATIONS = ["FBA North", "FBA South", "FBA East", "FBA West"];
 
@@ -324,7 +323,7 @@ function freshIdea() {
     draft: {
       project: PROFILE.project, submitter: PROFILE.name,
       date: new Date().toISOString().slice(0, 10),
-      siteLocation: "FBA North", phase: "Construction",
+      siteLocation: "FBA North",
       status: IDENTIFIED,
       summary: "Maximising the use of precast concrete bridge piers and modular spans, which are assembled off-site and craned into place during scheduled short-term network closures. Drastically reduces high-risk construction hours over water, mitigates environmental spill risks, and significantly limits disruption to critical transport arteries.",
       healthBenefit: "Moves formwork and concrete finishing to a controlled ground-level yard, cutting workers' exposure to work at height, manual handling strain, and silica dust over water.",
@@ -623,7 +622,6 @@ function multiSelect(id, options, selected, placeholder) {
    readDraftFromForm / validation helpers drive them. */
 function submissionFormGrid(d) {
   const siteOpts = SITE_LOCATIONS.map(l => `<option value="${esc(l)}" ${d.siteLocation === l ? "selected" : ""}>${esc(l)}</option>`).join("");
-  const phaseOpts = PHASES.map(p => `<option ${d.phase === p ? "selected" : ""}>${p}</option>`).join("");
   const statusOpts = IDEA_STATUSES.map(s => `<option value="${esc(s)}" ${d.status === s ? "selected" : ""}>${esc(s)}</option>`).join("");
 
   return `
@@ -634,15 +632,10 @@ function submissionFormGrid(d) {
         <div class="help">Attach supporting documents, drawings, or photos.</div>
         <ul id="attach-list" class="attach-list"></ul>
       </div>
-      <div class="field full">
+      <div class="field">
         <label for="f-status">Status <span class="req">*</span></label>
-        <select id="f-status" style="max-width:320px">${statusOpts}</select>
+        <select id="f-status">${statusOpts}</select>
         <div class="help" id="f-status-note">${esc(STATUS_NOTE[d.status] || STATUS_NOTE[IDENTIFIED])}</div>
-      </div>
-      <div class="field full" id="field-status-reason-form" ${d.status === NOT_FEASIBLE ? "" : "hidden"}>
-        <label for="f-status-reason">Why is this not feasible? <span class="req">*</span></label>
-        <input type="text" id="f-status-reason" placeholder="Brief reason" value="${esc(d.statusReason || "")}">
-        <div class="err">Please give a reason.</div>
       </div>
       <div class="field">
         <label for="f-site">Site Location <span class="req">*</span></label>
@@ -651,12 +644,10 @@ function submissionFormGrid(d) {
         </select>
         <div class="err">Please select the site location.</div>
       </div>
-      <div class="field">
-        <label for="f-phase">Applicable Phase <span class="req">*</span></label>
-        <select id="f-phase">
-          <option value="" ${d.phase ? "" : "selected"}>Select phase…</option>${phaseOpts}
-        </select>
-        <div class="err">Please select the applicable phase.</div>
+      <div class="field full" id="field-status-reason-form" ${d.status === NOT_FEASIBLE ? "" : "hidden"}>
+        <label for="f-status-reason">Why is this not feasible? <span class="req">*</span></label>
+        <input type="text" id="f-status-reason" placeholder="Brief reason" value="${esc(d.statusReason || "")}">
+        <div class="err">Please give a reason.</div>
       </div>
       <div class="field full">
         <label for="f-summary">Summary <span class="req">*</span></label>
@@ -755,7 +746,6 @@ function submissionCard() {
       <dt>Submitted by</dt><dd>${esc(s.submitter)}</dd>
       <dt>Date</dt><dd>${fmtDate(s.date)}</dd>
       <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
-      <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
       <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
       <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
       <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
@@ -1031,8 +1021,7 @@ function viewRecap(node, state) {
         <dt>Project</dt><dd>${esc(s.project)}</dd>
         <dt>Submitted by</dt><dd>${esc(s.submitter)} · ${fmtDate(s.submittedAt)}</dd>
         <dt>Site location</dt><dd>${esc(s.siteLocation)}</dd>
-        <dt>Applicable phase</dt><dd>${esc(s.phase)}</dd>
-        <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
+          <dt>Health benefit</dt><dd>${esc(s.healthBenefit || "") || "—"}</dd>
         <dt>Related FSR</dt><dd><span class="tags">${fsrDisplay(s).map(f => `<span class="tag">${esc(f)}</span>`).join("")}</span></dd>
         <dt>Attachments</dt><dd>${attachmentTags(s.attachments)}</dd>
         ${ap ? `
@@ -1082,7 +1071,7 @@ function readDraftFromForm() {
     date: idea.draft.date,
     status: g("f-status") ? g("f-status").value : (idea.draft.status || IDENTIFIED),
     statusReason: g("f-status-reason") ? g("f-status-reason").value : (idea.draft.statusReason || ""),
-    siteLocation: g("f-site").value, phase: g("f-phase").value,
+    siteLocation: g("f-site").value,
     summary: g("f-summary").value,
     healthBenefit: g("f-health-benefit") ? g("f-health-benefit").value : (idea.draft.healthBenefit || ""),
     fsr: [...document.querySelectorAll('[data-msel="f-fsr"] input:checked')].map(c => c.value),
@@ -1246,7 +1235,6 @@ function validateSubmissionForm() {
     bad = markInvalid(g("f-status-reason"), !(d.statusReason || "").trim()) || bad;
   }
   bad = markInvalid(g("f-site"), !d.siteLocation) || bad;
-  bad = markInvalid(g("f-phase"), !d.phase) || bad;
   bad = markInvalid(g("f-summary"), !d.summary.trim()) || bad;
   document.getElementById("field-fsr").classList.toggle("invalid", d.fsr.length === 0);
   bad = bad || d.fsr.length === 0;
@@ -1287,7 +1275,7 @@ function handleEditSave(e) {
   const d = idea.draft;
   const prevStatus = idea.submission.status;
   idea.submission = Object.assign({}, idea.submission, {
-    siteLocation: d.siteLocation, phase: d.phase,
+    siteLocation: d.siteLocation,
     summary: d.summary.trim(),
     healthBenefit: (d.healthBenefit || "").trim(),
     fsr: [...d.fsr], fsrOther: (d.fsrOther || "").trim(),
@@ -1356,7 +1344,7 @@ function draftFromSubmission() {
   return {
     project: s.project, submitter: s.submitter, date: s.date,
     status: s.status || IDENTIFIED, statusReason: idea.notFeasible ? idea.notFeasible.reason : "",
-    siteLocation: s.siteLocation, phase: s.phase,
+    siteLocation: s.siteLocation,
     summary: s.summary,
     healthBenefit: s.healthBenefit || "",
     fsr: [...(s.fsr || [])], fsrOther: s.fsrOther || "",
